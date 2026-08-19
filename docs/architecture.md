@@ -62,7 +62,7 @@ Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 | 6 | `06_deploy_komodo_op.yml` | resource syncs and the komodo-op stack |
 | 7 | `07_app_syncs.yml` | trigger the application stack syncs |
 
-Baselines are separate, on-demand playbooks: `security_baseline.yml` (SSH, fail2ban, unattended upgrades, optional nftables input firewall and Docker proxy firewall), `reliability_baseline.yml` (restart persistence, swap, shared networks), `docker_dns_baseline.yml` (pin the Docker daemon resolver).
+Baselines are separate, on-demand playbooks: `security_baseline.yml` (SSH, fail2ban, unattended upgrades, optional nftables input firewall and Docker proxy firewall), `reliability_baseline.yml` (restart persistence, swap, shared networks), `docker_dns_baseline.yml` (pin the Docker daemon resolver), `host_dns_baseline.yml` (hand the host resolver to systemd-resolved where it runs, so Tailscale steers only the tailnet domain and public names follow DHCP).
 Each baseline has a read-only `*_check.yml` counterpart.
 
 ## Secrets flow

@@ -38,3 +38,4 @@ Hosts are addressed by MagicDNS short name. Tailscale addresses, the tailnet dom
 - Manual compose operations on Ansible-managed stacks need `-p <komodo_compose_project_name> --env-file compose.env`; the defaults silently match nothing.
 - `komodo_periphery_version: "core"` tracks whatever Core reports; `make periphery-upgrade` re-aligns after a Core bump.
 - `legacy_core` exists only for `migrate_core.yml`; keep the group until the old Core's volumes are deliberately deleted.
+- A Proxmox LXC with no `nameserver` in its config inherits the PVE host's `resolv.conf` at start; if the host runs Tailscale that is `100.100.100.100`, and `tailscaled` inside the container then snapshots itself as the fallback. `host_dns_baseline.yml` is the guard; set `pct set <id> --nameserver` as well.
