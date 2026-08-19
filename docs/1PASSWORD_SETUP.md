@@ -61,7 +61,7 @@ This document lists all required 1Password items and fields for this infrastruct
 
 **Note**: The GitHub token needs repository read access for:
 - `brumi1024/deploy-komodo-op` (komodo-op stack definitions)
-- `brumi1024/homelab-komodo-stacks` (application stack definitions)
+- `brumi1024/komodo-app-stacks` (application stack definitions)
 
 ### 4. Komodo Homelab Credentials File
 
