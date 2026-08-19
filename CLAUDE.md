@@ -1,16 +1,21 @@
 # CLAUDE.md
 
-Ansible repository for a Komodo-based homelab. Public and forked: every commit is published for good.
+Ansible repository for a Komodo-based homelab, published as `homelab-infra`.
+Public and forked: every commit is published for good.
 
 ## Where knowledge lives
 
 Read in this order; each layer answers a different question.
 
-1. Obsidian note `Agentic/Homelab Overview` (operator machine only): what is true right now.
-2. `private/` (gitignored, operator machine only): dated audit evidence, plans with rollback steps, findings.
+1. Obsidian note `Agentic/Homelab Overview` (operator machine only): what is true right now. Per-site detail is in the site notes beside it.
+2. `private/` (gitignored, operator machine only): dated evidence, runbooks, plans. `private/README.md` indexes it.
 3. This repository: how to rebuild it. `docs/architecture.md` explains the shape without naming a deployment.
 
-Forks have only layer 3. Anything an agent needs to operate on this repository generically belongs in layer 3.
+If the Obsidian MCP is not connected, say so and fall back to `private/`; `hosts.example.yml` and `group_vars/` describe a shape, never the live estate.
+Forks have only layer 3, so anything an agent needs to operate this repository generically belongs in layer 3.
+
+Stack definitions live in the sibling repositories named in `README.md` (GitOps section) and `komodo_resource_syncs_repo`.
+On the operator machine they are checked out next to this one; the workspace `CLAUDE.md` one level up maps them.
 
 ## Shape versus state
 
@@ -22,8 +27,9 @@ Hosts are addressed by MagicDNS short name. Tailscale addresses, the tailnet dom
 ## Working here
 
 - `make lint` and `gitleaks git` pass before a commit. Both run in CI.
-- Runtime checks are read-only unless the task is a change: `make status`, `make recovery-check`, `make security-check`, `ansible-inventory --graph`.
-- After verifying or changing live infrastructure on the operator machine, update the Obsidian overview.
+- Read-only runtime checks run freely: `make status`, `make check`, `make recovery-check`, `make security-check`, `ansible-inventory --graph`.
+- Mutating targets change live hosts and need the task to be a change: `make deploy` and its steps, `core-upgrade`, `periphery-upgrade`, `periphery-uninstall`, every `*-baseline`.
+- After verifying or changing live infrastructure, update the Obsidian overview or the relevant site note in the same session.
 - Comments describe current state and rationale; history belongs to git.
 - Long Markdown: one sentence per line.
 
