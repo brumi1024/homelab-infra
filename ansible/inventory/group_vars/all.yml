@@ -80,6 +80,11 @@ homelab_docker_dns_servers:
   - "1.1.1.1"
 homelab_docker_dns_search:
   - "{{ homelab_tailnet }}"
+# Host resolver: where systemd-resolved runs, resolv.conf is its stub and
+# tailscaled steers only the tailnet domain, so public names follow DHCP
+# instead of the snapshot tailscaled took when it first ran.
+homelab_host_dns_enabled: true
+homelab_host_dns_public_probe: "github.com"
 homelab_docker_proxy_firewall_enabled: false
 homelab_docker_proxy_container_port: 2375
 # homelab_docker_proxy_source_ip is discovered at run time from the Core

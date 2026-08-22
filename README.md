@@ -113,6 +113,8 @@ The infrastructure uses a hub-and-spoke architecture where Komodo Core acts as t
 | `make status` | Check health status of all Komodo services |
 | `make recovery-check` | Verify restart and recovery prerequisites without changing hosts |
 | `make reliability-baseline` | Enable restart persistence, VPS swap, and shared networks |
+| `make docker-dns-baseline` | Pin the Docker daemon resolver with a public fallback |
+| `make host-dns-baseline` | Hand the host resolver to systemd-resolved where it runs; verify public and tailnet names resolve |
 | `make clean` | Clean up temporary files and caches |
 
 The Core migration is a one-off cutover rather than routine maintenance, so it has no Make target.

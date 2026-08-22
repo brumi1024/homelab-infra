@@ -6,7 +6,7 @@
         komodo-op app-syncs \
         core-upgrade periphery-upgrade periphery-uninstall \
         status recovery-check reliability-baseline \
-        security-check security-baseline docker-dns-baseline clean
+        security-check security-baseline docker-dns-baseline host-dns-baseline clean
 
 # Ansible configuration
 ANSIBLE_DIR := ansible
@@ -149,6 +149,10 @@ security-baseline: ## Apply pragmatic Linux host security baseline
 docker-dns-baseline: ## Pin Docker daemon DNS to the Tailnet resolver
 	@echo "🐳 Pinning Docker daemon DNS to Tailnet resolver..."
 	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) playbooks/docker_dns_baseline.yml
+
+host-dns-baseline: ## Keep the host resolver independent of Tailscale's resolv.conf snapshot
+	@echo "🧭 Pinning host resolver to systemd-resolved where it runs..."
+	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) playbooks/host_dns_baseline.yml
 
 clean: ## Clean up temporary files
 	@echo "🧹 Cleaning up..."
