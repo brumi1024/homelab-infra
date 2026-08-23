@@ -7,13 +7,13 @@ Public and forked: every commit is published for good.
 
 Read in this order; each layer answers a different question.
 
-1. Obsidian note `Agentic/Homelab Overview` (operator machine only): what is true right now. Per-site detail is in the site notes beside it.
-2. `private/` (gitignored, operator machine only): dated evidence, runbooks, plans. `private/README.md` indexes it.
-3. This repository: how to rebuild it. `docs/architecture.md` explains the shape without naming a deployment.
+1. The `agentic-notes` checkout: what is true right now, and how it got there. `Homelab Overview` (plus per-site notes beside it) is current state; `Infra/` is dated evidence, runbooks, and plans, indexed by `Infra/README.md`. It is its own git repo, synced through a private Forgejo repository, checked out on the operator machine and on `agent-infra`.
+2. This repository: how to rebuild it. `docs/architecture.md` explains the shape without naming a deployment.
 
-`agent-infra` has only layer 3: no Obsidian MCP, no `private/`.
-There, `make verify` is the closest thing to live truth, and findings belong in the PR body or task output, not in a file this repository does not have anywhere to put.
-Forks have only layer 3 too, so anything an agent needs to operate this repository generically belongs there.
+`agent-infra` gets both layers once `~/projects/agentic-notes` is cloned there (a real clone, not a copy); until that lands its `CLAUDE.md` says it still has only layer 2.
+Forks have only layer 2: no `agentic-notes` checkout, so anything an agent needs to operate this repository generically belongs there.
+
+Discipline for the `agentic-notes` checkout: pull it (`--ff-only`) before trusting it, commit and push in the same session as any live change or verification, on conflict re-verify against the live system rather than guessing which side is right, and never commit machine-generated bulk output (raw check output, large diffs, images stay box-local; only distilled reports and runbooks are committed).
 
 Stack definitions live in the sibling repositories named in `README.md` and `komodo_resource_syncs_repo`.
 On the operator machine and `agent-infra` they are checked out next to this one; the workspace `CLAUDE.md` one level up maps them.
@@ -21,7 +21,7 @@ On the operator machine and `agent-infra` they are checked out next to this one;
 ## Shape versus state
 
 Committed files hold reusable shape: roles, playbooks, `group_vars/` defaults, `hosts.example.yml`, docs.
-Operator state stays out of git: `ansible/inventory/hosts.yml`, `ansible/known_hosts`, `private/`, `.claude/settings.local.json`.
+Operator state stays out of git: `ansible/inventory/hosts.yml`, `ansible/known_hosts`, `.claude/settings.local.json`.
 Secrets are 1Password lookups against `homelab_op_vault`; a value never appears in a file, a log excerpt, or a commit message.
 Hosts are addressed by MagicDNS short name. Tailscale addresses, the tailnet domain, and public IPs stay out of the repository.
 
@@ -34,6 +34,8 @@ Hosts are addressed by MagicDNS short name. Tailscale addresses, the tailnet dom
 - After verifying or changing live infrastructure, update the Obsidian overview or the relevant site note in the same session, where that layer exists.
 - Comments describe current state and rationale in one line; history belongs to git. Match the density of the file; default to no comment.
 - Markdown: one sentence per line, plain dashes, no em dash.
+- A one-off fix applied by SSH stays a one-off fix: record it in `Infra/` with the date and the host.
+  Promote it into `host_baseline` (or the relevant role) only on its second occurrence, so the baseline grows from recurring gotchas, not single incidents.
 
 ## Gotchas no config confesses
 
