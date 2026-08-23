@@ -6,6 +6,12 @@ This document lists all required 1Password items and fields for this infrastruct
 
 - **Vault Name**: `Homelab Ansible`
 
+## Service account access
+
+A machine with no desktop 1Password app (a CI runner, a headless agent host) authenticates `op` from a service account token instead.
+`make bootstrap APPLY=1` writes the API key it creates back into the `Komodo` item, so that service account needs write access to `Komodo` specifically.
+Every other target only reads; read access to the vault is enough for everything except that one write.
+
 ## Required Items
 
 ### 1. Komodo (Primary Credentials)
