@@ -1,0 +1,9 @@
+---
+docker_daemon_options:
+  log-driver: local
+  log-opts:
+    max-size: 10m
+    max-file: "3"
+  storage-driver: overlay2
+  features:
+    buildkit: true
