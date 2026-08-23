@@ -1,0 +1,68 @@
+---
+- name: Keep Docker enabled across host restarts
+  ansible.builtin.systemd:
+    name: docker.service
+    enabled: true
+    state: started
+
+- name: Check whether Tailscale is installed
+  ansible.builtin.stat:
+    path: /usr/sbin/tailscaled
+  register: host_baseline_tailscaled_binary
+
+- name: Keep Tailscale enabled across host restarts
+  ansible.builtin.systemd:
+    name: tailscaled.service
+    enabled: true
+    state: started
+  when: host_baseline_tailscaled_binary.stat.exists
+
+- name: Allocate a swap file where configured
+  ansible.builtin.command:
+    argv:
+      - fallocate
+      - -l
+      - "{{ homelab_swap_size_mb }}M"
+      - /swapfile
+    creates: /swapfile
+  register: host_baseline_swapfile_created
+  when: homelab_swap_size_mb | int > 0
+
+- name: Restrict swap file permissions
+  ansible.builtin.file:
+    path: /swapfile
+    owner: root
+    group: root
+    mode: "0600"
+  when: homelab_swap_size_mb | int > 0
+
+- name: Initialize the new swap file
+  ansible.builtin.command: mkswap /swapfile
+  changed_when: true
+  when:
+    - homelab_swap_size_mb | int > 0
+    - host_baseline_swapfile_created is changed
+
+- name: Enable the swap file persistently
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^/swapfile\s+'
+    line: '/swapfile none swap sw 0 0'
+    owner: root
+    group: root
+    mode: "0644"
+  when: homelab_swap_size_mb | int > 0
+
+- name: List active swap devices
+  ansible.builtin.command: swapon --show=NAME --noheadings
+  register: host_baseline_active_swap
+  changed_when: false
+  check_mode: false
+  when: homelab_swap_size_mb | int > 0
+
+- name: Activate the swap file
+  ansible.builtin.command: swapon /swapfile
+  changed_when: true
+  when:
+    - homelab_swap_size_mb | int > 0
+    - "'/swapfile' not in host_baseline_active_swap.stdout_lines"

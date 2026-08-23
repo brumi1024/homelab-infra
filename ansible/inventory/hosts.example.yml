@@ -32,15 +32,6 @@ all:
                 - "127.0.0.1"
                 - "tailnet"
 
-        # Optional. Only needed while running migrate_core.yml from an old
-        # Core host to a new one. Delete this group otherwise.
-        # legacy_core:
-        #   hosts:
-        #     old-core-host:
-        #       ansible_host: "old-core-host"
-        #       node_site: main
-        #       komodo_role: legacy-core
-
         # Every host that should run Komodo Periphery, the Core host included
         # if it also runs stacks.
         periphery:

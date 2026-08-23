@@ -39,38 +39,33 @@ A fork takes the shape unchanged, supplies its own `hosts.yml` and 1Password vau
 
 | Group | Purpose | Playbooks that target it |
 | --- | --- | --- |
-| `control` | the operator machine, `localhost` | auth, komodo-op, app syncs |
-| `komodo` | every managed host | docker, baselines, recovery and security checks |
-| `core` | exactly one Komodo Core host | core deploy, status |
-| `periphery` | every Periphery host | periphery deploy and upgrade |
-| `legacy_core` | optional, the previous Core host during a migration | `migrate_core.yml` |
-| `proxmox` | optional, hypervisors touched only by the security baseline | security check and baseline |
+| `control` | the operator machine, `localhost` | auth, gitops, verify |
+| `komodo` | every managed host (`core` and `periphery` combined) | bootstrap (docker), baseline, verify |
+| `core` | exactly one Komodo Core host | bootstrap (core), upgrade |
+| `periphery` | every Periphery host | bootstrap (periphery), upgrade |
+| `proxmox` | optional, hypervisors touched only by the baseline's read-only checks | baseline, verify |
 
 Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
-## Playbook sequence
+## Roles and playbooks
 
-`make deploy` runs the numbered playbooks in order; each is idempotent and can be re-run alone.
+Six roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (security, firewall, reliability, DNS, and their read-only verification).
 
-| Step | Playbook | Effect |
+Four playbooks compose them; each is idempotent and safe to re-run.
+
+| Playbook | Effect | Mutates by default |
 | --- | --- | --- |
-| 1 | `01_docker.yml` | Docker Engine on every `komodo` host |
-| 2 | `02_komodo_core.yml` | Core compose stack on the `core` host |
-| 3 | `03_komodo_auth.yml` | admin user, service user, API key stored back into 1Password |
-| 4 | `04_komodo_periphery.yml` | Periphery on every `periphery` host, version tracked from Core |
-| 5 | `05_bootstrap_komodo_op.yml` | Komodo global variables and git provider needed by komodo-op |
-| 6 | `06_deploy_komodo_op.yml` | resource syncs and the komodo-op stack |
-| 7 | `07_app_syncs.yml` | trigger the application stack syncs |
-
-Baselines are separate, on-demand playbooks: `security_baseline.yml` (SSH, fail2ban, unattended upgrades, optional nftables input firewall and Docker proxy firewall), `reliability_baseline.yml` (restart persistence, swap, shared networks), `docker_dns_baseline.yml` (pin the Docker daemon resolver), `host_dns_baseline.yml` (hand the host resolver to systemd-resolved where it runs, so Tailscale steers only the tailnet domain and public names follow DHCP).
-Each baseline has a read-only `*_check.yml` counterpart.
+| `bootstrap.yml` | Docker on `komodo`, Core on `core`, auth on `localhost`, Core again to pick up the new API key, Periphery on `periphery`, GitOps on `localhost` | yes, `APPLY=1` required |
+| `baseline.yml` | applies `host_baseline` on `komodo`, verifies it on `proxmox` | yes, `APPLY=1` required |
+| `verify.yml` | every read-only check, tagged `security`, `reliability`, `dns`, `komodo`, `proxmox` | no |
+| `upgrade.yml` | Core with a fresh image pull, then Periphery tracking `komodo_periphery_version` | yes, `APPLY=1` required |
 
 ## Secrets flow
 
-1. The operator creates the items in `docs/1PASSWORD_SETUP.md` in one vault.
+1. The operator creates the items in `docs/1password.md` in one vault.
 2. Ansible reads them at run time with `community.general.onepassword` lookups; nothing is written to disk on the operator machine.
-3. Rendered files on hosts (`compose.env`) contain the values, protected by file mode and the host firewall.
-4. `03_komodo_auth.yml` writes the API key it creates back into the same vault, so later playbooks and komodo-op read one source.
+3. Rendered files on hosts (`compose.env`, `core.config.toml`) contain the values, protected by file mode and the host firewall.
+4. `komodo_auth` writes the API key it creates back into the same vault, so later runs and `komodo_gitops` read one source.
 
 ## Design choices worth knowing
 

@@ -8,7 +8,6 @@
 homelab_op_vault: "Homelab Ansible"
 
 ansible_user: root
-ansible_ssh_private_key_file: ~/.ssh/id_rsa
 
 # Komodo Core Settings
 komodo_install_dir: "/opt/komodo"
@@ -42,9 +41,12 @@ komodo_public_url: >-
   }}
 komodo_core_http_address: "{{ komodo_public_url }}"
 komodo_core_local_health_url: "http://127.0.0.1:{{ komodo_port }}"
+# Reachable over the tailnet whether or not the public edge is up; used for
+# every automated API call (auth, gitops, verify), as opposed to
+# komodo_public_url, which is the public-facing address.
+komodo_api_url: "http://{{ hostvars[groups['core'][0]].ansible_host }}:{{ komodo_port }}"
 
 # Authentication Settings
-komodo_auth_base_url: "{{ komodo_core_http_address }}"
 komodo_auth_admin_username: "{{ lookup('community.general.onepassword', 'Komodo', field='username', vault=homelab_op_vault) }}"
 komodo_auth_admin_password: "{{ lookup('community.general.onepassword', 'Komodo', field='password', vault=homelab_op_vault) }}"
 komodo_auth_service_user: "komodo-automation"
@@ -54,10 +56,6 @@ komodo_auth_api_key_name: "deployment-api-key"
 # API Credentials (1Password lookups)
 komodo_core_api_key: "{{ lookup('community.general.onepassword', 'Komodo', field='komodo_api_key', vault=homelab_op_vault) }}"
 komodo_core_api_secret: "{{ lookup('community.general.onepassword', 'Komodo', field='komodo_api_secret', vault=homelab_op_vault) }}"
-
-# komodo-op Configuration (Secret Management)
-enable_komodo_op: true  # Set to true to enable komodo-op deployment
-# NOTE: komodo-op repository is now defined in komodo-resource-syncs, not here
 
 # Resource Syncs Configuration (GitOps)
 komodo_resource_syncs_repo: "brumi1024/komodo-resource-syncs"
@@ -89,7 +87,7 @@ homelab_docker_proxy_firewall_enabled: false
 homelab_docker_proxy_container_port: 2375
 # homelab_docker_proxy_source_ip is discovered at run time from the Core
 # host, because iptables source matching needs a literal address. See
-# playbooks/tasks/discover_core_tailnet_ip.yml.
+# roles/host_baseline/tasks/discover_core_tailnet_ip.yml.
 homelab_swap_size_mb: 0
 
 # geerlingguy.security owns the generic Linux hardening. Keep these

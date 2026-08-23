@@ -1,0 +1,19 @@
+---
+- name: Verify the komodo and proxmox baselines
+  hosts: komodo:proxmox
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Run host_baseline verify checks
+      ansible.builtin.include_role:
+        name: host_baseline
+        tasks_from: verify
+
+- name: Verify Komodo Core sees every Periphery node
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Run host_baseline verify checks
+      ansible.builtin.include_role:
+        name: host_baseline
+        tasks_from: verify

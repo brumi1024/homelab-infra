@@ -1,0 +1,56 @@
+---
+# Installs Docker, deploys Komodo Core, initializes authentication, installs
+# Periphery on every node, and wires up GitOps resource syncs.
+# A --check --diff dry run is only meaningful on hosts that already have
+# Docker; a host with no Docker yet reports every later task as unreachable,
+# not as a real diff.
+
+- name: Install Docker
+  hosts: komodo
+  become: true
+  gather_facts: true
+  roles:
+    - role: docker
+      tags: [docker]
+
+- name: Deploy Komodo Core
+  hosts: core
+  become: true
+  gather_facts: true
+  roles:
+    - role: komodo_core
+      tags: [core]
+
+- name: Initialize Komodo authentication
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: komodo_auth
+      tags: [auth]
+
+- name: Re-render Komodo Core config with the service user's API key
+  hosts: core
+  become: true
+  gather_facts: true
+  tags: [core-rerender]
+  roles:
+    - role: komodo_core
+
+- name: Install Komodo Periphery
+  hosts: periphery
+  become: true
+  gather_facts: true
+  serial: 2
+  roles:
+    - role: bpbradley.komodo
+      vars:
+        komodo_action: install
+        komodo_version: "{{ komodo_periphery_version }}"
+      tags: [periphery]
+
+- name: Configure GitOps resource syncs
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: komodo_gitops
+      tags: [gitops]
