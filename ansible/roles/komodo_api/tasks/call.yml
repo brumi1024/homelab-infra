@@ -22,3 +22,8 @@
     status_code: "{{ komodo_api_status | default([200]) }}"
   register: komodo_api_result
   no_log: true
+  # Reads never mutate Komodo, so they run for real even in --check, letting
+  # a dry run genuinely inspect state instead of every read-then-decide task
+  # crashing on the unset result of a call check mode skipped. Writes and
+  # executes keep the default: skipped under --check, real otherwise.
+  check_mode: "{{ false if komodo_api_endpoint == 'read' else omit }}"

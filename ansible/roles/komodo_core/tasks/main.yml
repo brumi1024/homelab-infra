@@ -112,6 +112,7 @@
   register: komodo_core_health
   until: komodo_core_health.status == 200
   ignore_errors: true
+  check_mode: false
 
 - name: Fail if Komodo Core is not healthy
   ansible.builtin.fail:

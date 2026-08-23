@@ -44,7 +44,7 @@
   roles:
     - role: bpbradley.komodo
       vars:
-        komodo_action: "{{ komodo_action | default('install') }}"
+        komodo_action: install
         komodo_version: "{{ komodo_periphery_version }}"
       tags: [periphery]
 

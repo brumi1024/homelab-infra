@@ -23,10 +23,11 @@
     status_code: [200]
   retries: "{{ komodo_auth_max_retries }}"
   delay: "{{ komodo_auth_retry_delay }}"
+  check_mode: false
 
 - name: Log in as the admin user
   ansible.builtin.uri:
-    url: "{{ komodo_api_url }}/auth"
+    url: "{{ komodo_api_url }}/auth/login"
     method: POST
     headers:
       Content-Type: application/json
@@ -39,10 +40,22 @@
     status_code: [200]
   register: komodo_auth_login
   no_log: true
+  # A login call does not mutate Komodo, so it runs for real even in
+  # --check; every later task in this role needs the JWT it returns.
+  check_mode: false
+
+- name: Fail if the admin login needs a second factor
+  ansible.builtin.assert:
+    that: komodo_auth_login.json.type == 'Jwt'
+    fail_msg: >-
+      Admin login returned {{ komodo_auth_login.json.type }} instead of a JWT;
+      the admin user has a second factor (TOTP or passkey) configured, which
+      this role does not handle.
+  no_log: true
 
 - name: Register the admin JWT
   ansible.builtin.set_fact:
-    komodo_auth_jwt: "{{ komodo_auth_login.json.jwt }}"
+    komodo_auth_jwt: "{{ komodo_auth_login.json.data.jwt }}"
   no_log: true
 
 - name: Look up the service user
