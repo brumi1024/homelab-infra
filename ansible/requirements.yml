@@ -6,7 +6,7 @@
 roles:
   # Docker installation and management
   - name: geerlingguy.docker
-    version: "7.0.1"
+    version: "7.9.0"
 
   # Pragmatic SSH, fail2ban, and unattended-upgrades baseline
   - name: geerlingguy.security
