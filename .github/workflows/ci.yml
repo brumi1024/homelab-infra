@@ -1,0 +1,36 @@
+---
+name: ci
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Ansible collections and roles
+        run: ansible-galaxy install -r ansible/requirements.yml -p ~/.ansible/roles && ansible-galaxy collection install -r ansible/requirements.yml
+
+      - name: Lint
+        run: make lint
+
+      - name: Syntax check
+        run: make syntax
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

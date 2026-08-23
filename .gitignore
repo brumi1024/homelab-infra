@@ -6,6 +6,7 @@ vault_pass*
 # Ansible temporary files
 *.retry
 .ansible/
+ansible/known_hosts
 
 # Environment files
 .env
@@ -43,48 +44,9 @@ Thumbs.db
 # Python artifacts
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
 # Virtual environments
-venv/
-env/
-ENV/
 .venv/
-.env/
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Testing artifacts
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
-# Pre-commit
-.pre-commit-config.yaml
 
 # Logs
 *.log

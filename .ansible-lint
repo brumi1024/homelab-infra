@@ -1,62 +1,20 @@
 ---
-# .ansible-lint
-# Ansible Lint configuration for Komodo infrastructure
+profile: production
+offline: true
 
-# Use this to control ansible-lint behavior
-profile: production  # Options: min, basic, moderate, safety, shared, production
-
-# Offline mode - useful in CI if external resources aren't accessible
-offline: true  # Don't download roles - we mock them instead
-
-# Enable progressive mode to return success even with warnings
-# progressive: true
-
-# Paths to exclude from linting
 exclude_paths:
   - .cache/
   - .github/
-  - venv/
+  - .venv/
 
-# Mock modules or roles to prevent lint errors
 mock_modules:
   - community.general.onepassword
 
-# Mock roles to prevent missing role errors
 mock_roles:
   - geerlingguy.docker
   - geerlingguy.security
   - bpbradley.komodo
 
-# Specific rules to skip (use sparingly)
-# skip_list:
-  # - yaml[line-length]  # Lines can be longer than 160 chars
-  # - name[casing]  # Allow tasks without names in certain contexts
-
-# Extra variables to satisfy ansible-lint
 extra_vars:
   ansible_user: root
   ansible_host: example.com
-
-# Tags to skip
-# skip_tags:
-#   - skip_ansible_lint
-
-# Offline mode - useful in CI if external resources aren't accessible
-# offline: false
-
-# List of additional rules directories
-# rulesdir:
-#   - ./custom-rules/
-
-# Ansible-lint completely ignores errors from these paths
-# ignore_paths:
-#   - .cache/
-
-# Set the parseable output format (useful for CI integration)
-# parseable: true
-
-# Show which rule was violated
-# quiet: false
-
-# Path to ansible.cfg
-# config_file: ansible/ansible.cfg

@@ -1,7 +1,0 @@
-# Development dependencies for Homelab Komodo infrastructure
-# Install with: pip install -r requirements-dev.txt
-
-# Core Ansible tools for infrastructure automation
-ansible>=8.0.0
-ansible-lint>=24.0.0
-yamllint>=1.35.0

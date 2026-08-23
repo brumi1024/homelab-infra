@@ -1,7 +1,7 @@
 # Komodo Infrastructure Makefile
 # Simplified deployment management with direct Ansible calls
 
-.PHONY: help setup lint check \
+.PHONY: help setup lint syntax check \
         docker core auth periphery deploy \
         komodo-op app-syncs \
         core-upgrade periphery-upgrade periphery-uninstall \
@@ -15,6 +15,8 @@ ANSIBLE_OPTS := -i $(INVENTORY)
 # Override from CLI for per-run extras, e.g.
 #   make periphery-upgrade EXTRA_VARS="-e komodo_onboarding_key=O-..."
 EXTRA_VARS :=
+VENV := .venv
+VENV_BIN := $(CURDIR)/$(VENV)/bin
 
 # Default target
 help: ## Show this help message
@@ -32,14 +34,16 @@ help: ## Show this help message
 # Setup and Dependencies
 # =============================================================================
 
-setup: ## Install Ansible dependencies and create inventory/hosts.yml if missing
-	@echo "📦 Installing Ansible dependencies..."
-	@./scripts/setup-ansible.sh
+setup: ## Install Python deps into .venv, Ansible collections and roles, create inventory/hosts.yml if missing
+	@python3 -m venv $(VENV)
+	@$(VENV_BIN)/pip install -q -r requirements.txt
+	@ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles
+	@ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
+	@command -v op >/dev/null 2>&1 || echo "⚠️  1Password CLI (op) not found; secret lookups will fail"
 	@if [ ! -f $(ANSIBLE_DIR)/$(INVENTORY) ]; then \
 		cp $(ANSIBLE_DIR)/inventory/hosts.example.yml $(ANSIBLE_DIR)/$(INVENTORY); \
 		echo "📝 Created $(ANSIBLE_DIR)/$(INVENTORY) from hosts.example.yml - edit it for your hosts"; \
 	fi
-	@echo "✅ Setup complete!"
 
 check: ## Check connectivity to all hosts
 	@echo "🔍 Checking connectivity..."
@@ -50,11 +54,14 @@ check: ## Check connectivity to all hosts
 # =============================================================================
 
 lint: ## Run ansible-lint and yamllint
-	@echo "🔍 Running ansible-lint..."
-	@cd ansible && ansible-lint
-	@echo "🔍 Running yamllint..."
-	@yamllint -c ansible/.yamllint ansible/ .github/workflows/
-	@echo "✅ Linting complete!"
+	@cd ansible && $(VENV_BIN)/ansible-lint
+	@$(VENV_BIN)/yamllint -c ansible/.yamllint ansible/ .github/workflows/
+
+syntax: ## Syntax-check every playbook against hosts.example.yml
+	@cd ansible && for playbook in playbooks/*.yml site.yml; do \
+		[ -f "$$playbook" ] || continue; \
+		$(VENV_BIN)/ansible-playbook -i inventory/hosts.example.yml "$$playbook" --syntax-check || exit 1; \
+	done
 
 # =============================================================================
 # Individual Deployment Steps
