@@ -1,0 +1,122 @@
+---
+- name: List Komodo resource syncs
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: read
+    komodo_api_type: ListResourceSyncs
+    komodo_api_params: {}
+
+- name: Resolve the resource syncs meta-sync identity
+  ansible.builtin.set_fact:
+    komodo_gitops_meta_sync_exists: "{{ (komodo_api_result.json | selectattr('name', 'equalto', komodo_gitops_meta_sync_name) | list | length) > 0 }}"
+    komodo_gitops_meta_sync_id: "{{ (komodo_api_result.json | selectattr('name', 'equalto', komodo_gitops_meta_sync_name) | list | first).id | default('') }}"
+
+- name: Create the resource syncs meta-sync
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: write
+    komodo_api_type: CreateResourceSync
+    komodo_api_params:
+      name: "{{ komodo_gitops_meta_sync_name }}"
+      config:
+        repo: "{{ komodo_resource_syncs_repo }}"
+        branch: "{{ komodo_resource_syncs_branch }}"
+        git_account: "{{ komodo_resource_syncs_git_account }}"
+        resource_path: "{{ komodo_gitops_meta_sync_resource_path }}"
+        managed: "{{ komodo_gitops_meta_sync_managed }}"
+        delete: "{{ komodo_gitops_meta_sync_delete }}"
+        match_tags: "{{ komodo_gitops_meta_sync_match_tags }}"
+    komodo_api_status: [200, 201]
+  when: not komodo_gitops_meta_sync_exists
+
+- name: Update the resource syncs meta-sync
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: write
+    komodo_api_type: UpdateResourceSync
+    komodo_api_params:
+      id: "{{ komodo_gitops_meta_sync_id }}"
+      config:
+        repo: "{{ komodo_resource_syncs_repo }}"
+        branch: "{{ komodo_resource_syncs_branch }}"
+        git_account: "{{ komodo_resource_syncs_git_account }}"
+        resource_path: "{{ komodo_gitops_meta_sync_resource_path }}"
+        managed: "{{ komodo_gitops_meta_sync_managed }}"
+        delete: "{{ komodo_gitops_meta_sync_delete }}"
+        match_tags: "{{ komodo_gitops_meta_sync_match_tags }}"
+    komodo_api_status: [200, 201]
+  when: komodo_gitops_meta_sync_exists
+
+- name: Create the meta-sync webhook
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: write
+    komodo_api_type: CreateSyncWebhook
+    komodo_api_params:
+      sync: "{{ komodo_gitops_meta_sync_name }}"
+      action: "Sync"
+    komodo_api_status: [200, 201, 409]
+
+- name: Run the meta-sync
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: execute
+    komodo_api_type: RunSync
+    komodo_api_params:
+      sync: "{{ komodo_gitops_meta_sync_name }}"
+    komodo_api_status: [200, 201]
+
+- name: Wait for the meta-sync to finish
+  ansible.builtin.include_tasks: poll_resource_sync.yml
+  loop: "{{ range(0, komodo_gitops_sync_retries) | list }}"
+  vars:
+    komodo_gitops_poll_sync_name: "{{ komodo_gitops_meta_sync_name }}"
+
+- name: Wait for the komodo-op stack to appear
+  ansible.builtin.include_tasks: poll_stack_exists.yml
+  loop: "{{ range(0, komodo_gitops_stack_retries) | list }}"
+
+- name: Deploy the komodo-op stack
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: execute
+    komodo_api_type: DeployStack
+    komodo_api_params:
+      stack: "{{ komodo_gitops_op_stack.name }}"
+      services: []
+    komodo_api_status: [200, 201]
+  when: komodo_gitops_op_stack.info.state | default('') != 'running'
+
+- name: Run the application stacks sync
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: execute
+    komodo_api_type: RunSync
+    komodo_api_params:
+      sync: "{{ komodo_gitops_app_stacks_sync_name }}"
+    komodo_api_status: [200, 201]
+
+- name: Reset the poll state for the application stacks sync
+  ansible.builtin.set_fact:
+    komodo_gitops_poll_done: false
+    komodo_gitops_poll_pending_error: ""
+
+- name: Wait for the application stacks sync to finish
+  ansible.builtin.include_tasks: poll_resource_sync.yml
+  loop: "{{ range(0, komodo_gitops_sync_retries) | list }}"
+  vars:
+    komodo_gitops_poll_sync_name: "{{ komodo_gitops_app_stacks_sync_name }}"

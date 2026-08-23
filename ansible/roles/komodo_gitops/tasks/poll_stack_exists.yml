@@ -1,0 +1,28 @@
+---
+- name: List Komodo stacks
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: read
+    komodo_api_type: ListStacks
+    komodo_api_params: {}
+  when: komodo_gitops_op_stack is not defined or komodo_gitops_op_stack is none
+
+- name: Record the komodo-op stack
+  ansible.builtin.set_fact:
+    komodo_gitops_op_stack: "{{ komodo_api_result.json | selectattr('name', 'equalto', komodo_gitops_op_stack_name) | first | default(none) }}"
+  when: komodo_gitops_op_stack is not defined or komodo_gitops_op_stack is none
+
+- name: Pause before the next stack list check
+  ansible.builtin.pause:
+    seconds: "{{ komodo_gitops_stack_delay }}"
+  when:
+    - komodo_gitops_op_stack is not defined or komodo_gitops_op_stack is none
+    - item < (komodo_gitops_stack_retries - 1)
+
+- name: Fail if the komodo-op stack never appeared
+  ansible.builtin.assert:
+    that: komodo_gitops_op_stack is defined and komodo_gitops_op_stack is not none
+    fail_msg: "komodo-op stack did not appear after {{ komodo_gitops_stack_retries }} attempts"
+  when: item == (komodo_gitops_stack_retries - 1)

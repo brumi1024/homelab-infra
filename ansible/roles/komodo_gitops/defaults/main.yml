@@ -1,0 +1,14 @@
+---
+komodo_gitops_meta_sync_name: "komodo-resource-syncs"
+komodo_gitops_meta_sync_resource_path: "syncs.toml"
+komodo_gitops_meta_sync_managed: true
+komodo_gitops_meta_sync_delete: true
+komodo_gitops_meta_sync_match_tags: ["sync"]
+
+komodo_gitops_op_stack_name: "komodo-op"
+komodo_gitops_app_stacks_sync_name: "komodo-app-stacks"
+
+komodo_gitops_sync_retries: 30
+komodo_gitops_sync_delay: 10
+komodo_gitops_stack_retries: 30
+komodo_gitops_stack_delay: 10

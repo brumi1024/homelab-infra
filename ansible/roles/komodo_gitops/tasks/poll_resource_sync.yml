@@ -1,0 +1,32 @@
+---
+- name: Get resource sync status
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: read
+    komodo_api_type: GetResourceSync
+    komodo_api_params:
+      sync: "{{ komodo_gitops_poll_sync_name }}"
+  when: not (komodo_gitops_poll_done | default(false))
+
+- name: Record the sync pending error
+  ansible.builtin.set_fact:
+    komodo_gitops_poll_pending_error: "{{ komodo_api_result.json.info.pending_error | default('') }}"
+    komodo_gitops_poll_done: "{{ not (komodo_api_result.json.info.pending_error | default('')) }}"
+  when: not (komodo_gitops_poll_done | default(false))
+
+- name: Pause before the next sync status check
+  ansible.builtin.pause:
+    seconds: "{{ komodo_gitops_sync_delay }}"
+  when:
+    - not (komodo_gitops_poll_done | default(false))
+    - item < (komodo_gitops_sync_retries - 1)
+
+- name: Fail if the sync still has a pending error after the last attempt
+  ansible.builtin.assert:
+    that: komodo_gitops_poll_done | default(false)
+    fail_msg: >-
+      {{ komodo_gitops_poll_sync_name }} still has a pending error after
+      {{ komodo_gitops_sync_retries }} attempts: {{ komodo_gitops_poll_pending_error | default('unknown') }}
+  when: item == (komodo_gitops_sync_retries - 1)
