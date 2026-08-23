@@ -19,8 +19,8 @@ help: ## Show this help message
 setup: ## Install Python deps into .venv, Ansible collections and roles, create inventory/hosts.yml if missing
 	@python3 -m venv $(VENV)
 	@$(VENV_BIN)/pip install -q -r requirements.txt
-	@ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles
-	@ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
+	@$(VENV_BIN)/ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles
+	@$(VENV_BIN)/ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
 	@command -v op >/dev/null 2>&1 || echo "1Password CLI (op) not found; secret lookups will fail"
 	@if [ ! -f $(ANSIBLE_DIR)/$(INVENTORY) ]; then \
 		cp $(ANSIBLE_DIR)/inventory/hosts.example.yml $(ANSIBLE_DIR)/$(INVENTORY); \
