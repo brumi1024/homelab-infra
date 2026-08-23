@@ -18,11 +18,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install Ansible collections and roles
-        run: ansible-galaxy install -r ansible/requirements.yml -p ~/.ansible/roles && ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Set up dependencies
+        run: make setup
 
       - name: Lint
         run: make lint
