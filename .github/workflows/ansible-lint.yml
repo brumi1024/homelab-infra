@@ -19,7 +19,7 @@ jobs:
     name: Ansible Lint  # Naming the build is important to use it as a status check
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
