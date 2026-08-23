@@ -1,0 +1,17 @@
+---
+- name: Apply the host baseline
+  hosts: komodo
+  become: true
+  gather_facts: true
+  roles:
+    - role: host_baseline
+
+- name: Verify the Proxmox baseline
+  hosts: proxmox
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run host_baseline verify checks
+      ansible.builtin.include_role:
+        name: host_baseline
+        tasks_from: verify
