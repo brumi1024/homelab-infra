@@ -1,92 +1,142 @@
 ---
-# WARNING: POTENTIAL SILENT FAILURE SCENARIO
-# ========================================
-# This check prevents recreating API keys if they exist in 1Password.
-# However, on FRESH deployments, if stale API keys exist in 1Password from
-# a previous deployment, this will skip API key creation in the NEW Komodo instance,
-# causing silent failures in subsequent playbooks.
-#
-# SOLUTION: Before fresh deployments, ensure the "Komodo" item in 1Password
-# either doesn't exist or has the komodo_api_key field removed:
-#   op item delete "Komodo" --vault "<your vault>"
-# OR
-#   op item edit "Komodo" --vault "<your vault>" komodo_api_key=""
-
-- name: Check if API keys already exist in 1Password
-  ansible.builtin.shell: op item get "Komodo" --vault "Homelab" --fields komodo_api_key 2>/dev/null || echo ""
+- name: Check for an existing API key in 1Password
+  ansible.builtin.command:
+    argv:
+      - op
+      - item
+      - get
+      - Komodo
+      - --vault
+      - "{{ homelab_op_vault }}"
+      - --fields
+      - komodo_api_key
   register: komodo_auth_existing_api_key
-  failed_when: false
   changed_when: false
-  no_log: true
-
-- name: Show API key recreation notice when forcing recreation
-  ansible.builtin.debug:
-    msg:
-      - "🔄 Force recreation enabled - will recreate API keys even though they exist in 1Password"
-      - "⚠️  This will overwrite existing API keys!"
-  when:
-    - komodo_auth_existing_api_key.stdout != ""
-    - komodo_auth_force_recreate | default(false) | bool
-
-- name: Skip authentication setup if API keys already exist (unless force recreate)
-  ansible.builtin.meta: end_play
-  when:
-    - komodo_auth_existing_api_key.stdout != ""
-    - not (komodo_auth_force_recreate | default(false) | bool)
-
-- name: Wait for Komodo Core to be ready
-  ansible.builtin.uri:
-    url: "{{ komodo_auth_base_url }}"
-    method: GET
-    status_code: 200
-  retries: 10
-  delay: 5
-
-- name: Test if admin user already exists
-  ansible.builtin.uri:
-    url: "{{ komodo_auth_base_url }}/auth"
-    method: POST
-    headers:
-      Content-Type: "application/json"
-    body_format: json
-    body:
-      type: "LoginLocalUser"
-      params:
-        username: "{{ komodo_auth_admin_username }}"
-        password: "{{ komodo_auth_admin_password }}"
-    status_code: [200, 500] # 200 = success, 500 = user doesn't exist
-  register: komodo_auth_login_test
+  check_mode: false
   failed_when: false
   no_log: true
 
-- name: Handle fresh deployment if admin user doesn't exist
-  ansible.builtin.include_tasks: create_admin_user.yml
-  when: komodo_auth_login_test.status != 200
-
-- name: Login as admin user
+- name: Wait for Komodo Core to answer
   ansible.builtin.uri:
-    url: "{{ komodo_auth_base_url }}/auth"
+    url: "{{ komodo_api_url }}"
+    method: GET
+    status_code: [200]
+  retries: "{{ komodo_auth_max_retries }}"
+  delay: "{{ komodo_auth_retry_delay }}"
+
+- name: Log in as the admin user
+  ansible.builtin.uri:
+    url: "{{ komodo_api_url }}/auth"
     method: POST
     headers:
-      Content-Type: "application/json"
+      Content-Type: application/json
     body_format: json
     body:
-      type: "LoginLocalUser"
+      type: LoginLocalUser
       params:
         username: "{{ komodo_auth_admin_username }}"
         password: "{{ komodo_auth_admin_password }}"
-    status_code: 200
-  register: komodo_auth_login_response
+    status_code: [200]
+  register: komodo_auth_login
   no_log: true
 
-- name: Extract JWT token
+- name: Register the admin JWT
   ansible.builtin.set_fact:
-    komodo_auth_jwt_token: "{{ komodo_auth_login_response.json.jwt }}"
+    komodo_auth_jwt: "{{ komodo_auth_login.json.jwt }}"
   no_log: true
 
-- name: Create or find service user
-  ansible.builtin.include_tasks: manage_service_user.yml
-- name: Create API key for service user
-  ansible.builtin.include_tasks: create_api_key.yml
-- name: Store API credentials in 1Password
-  ansible.builtin.include_tasks: store_credentials.yml
+- name: Look up the service user
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: read
+    komodo_api_type: FindUser
+    komodo_api_params:
+      username: "{{ komodo_auth_service_user }}"
+    komodo_api_status: [200, 404]
+    komodo_api_jwt: "{{ komodo_auth_jwt }}"
+  no_log: true
+
+- name: Save the service user lookup
+  ansible.builtin.set_fact:
+    komodo_auth_service_user_lookup: "{{ komodo_api_result }}"
+  no_log: true
+
+- name: Create the service user when it does not exist
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: write
+    komodo_api_type: CreateServiceUser
+    komodo_api_params:
+      username: "{{ komodo_auth_service_user }}"
+      description: "{{ komodo_auth_service_user_description }}"
+    komodo_api_jwt: "{{ komodo_auth_jwt }}"
+  when: komodo_auth_service_user_lookup.status != 200
+  no_log: true
+
+- name: Resolve the service user id
+  ansible.builtin.set_fact:
+    komodo_auth_service_user_id: >-
+      {{
+        (komodo_api_result.json._id['$oid'])
+        if komodo_auth_service_user_lookup.status != 200
+        else komodo_auth_service_user_lookup.json._id['$oid']
+      }}
+  no_log: true
+
+- name: Grant the service user admin permissions
+  ansible.builtin.include_role:
+    name: komodo_api
+    tasks_from: call
+  vars:
+    komodo_api_endpoint: write
+    komodo_api_type: UpdateUserAdmin
+    komodo_api_params:
+      user_id: "{{ komodo_auth_service_user_id }}"
+      admin: true
+    komodo_api_jwt: "{{ komodo_auth_jwt }}"
+  no_log: true
+
+- name: Create and store a service user API key
+  when: komodo_auth_existing_api_key.stdout == "" or komodo_auth_force_recreate | bool
+  no_log: true
+  block:
+    - name: Create an API key for the service user
+      ansible.builtin.include_role:
+        name: komodo_api
+        tasks_from: call
+      vars:
+        komodo_api_endpoint: write
+        komodo_api_type: CreateApiKeyForServiceUser
+        komodo_api_params:
+          user_id: "{{ komodo_auth_service_user_id }}"
+          name: "{{ komodo_auth_api_key_name }}"
+          expires: 0
+        komodo_api_jwt: "{{ komodo_auth_jwt }}"
+
+    - name: Store the API key in 1Password
+      ansible.builtin.command:
+        argv:
+          - op
+          - item
+          - edit
+          - Komodo
+          - --vault
+          - "{{ homelab_op_vault }}"
+          - "komodo_api_key={{ komodo_api_result.json.key }}"
+      changed_when: true
+
+    - name: Store the API secret in 1Password
+      ansible.builtin.command:
+        argv:
+          - op
+          - item
+          - edit
+          - Komodo
+          - --vault
+          - "{{ homelab_op_vault }}"
+          - "komodo_api_secret={{ komodo_api_result.json.secret }}"
+      changed_when: true

@@ -1,0 +1,10 @@
+---
+- name: Restart komodo
+  community.docker.docker_compose_v2:
+    project_src: "{{ komodo_install_dir }}"
+    project_name: "{{ komodo_compose_project_name }}"
+    env_files:
+      - "{{ komodo_install_dir }}/compose.env"
+    state: present
+    recreate: always
+  environment: "{{ ansible_env }}"

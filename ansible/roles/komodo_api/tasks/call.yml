@@ -1,0 +1,24 @@
+---
+# Single mechanism for every Komodo API call.
+# Callers set komodo_api_endpoint (read, write, execute), komodo_api_type,
+# komodo_api_params, and optionally komodo_api_status; the result lands in
+# komodo_api_result.
+# Auth is X-Api-Key/X-Api-Secret unless the caller has set komodo_api_jwt.
+- name: Call the Komodo API
+  ansible.builtin.uri:
+    url: "{{ komodo_api_url }}/{{ komodo_api_endpoint }}"
+    method: POST
+    headers: >-
+      {{
+        ({'Authorization': komodo_api_jwt}
+          if komodo_api_jwt is defined
+          else {'X-Api-Key': komodo_core_api_key, 'X-Api-Secret': komodo_core_api_secret})
+        | combine({'Content-Type': 'application/json'})
+      }}
+    body_format: json
+    body:
+      type: "{{ komodo_api_type }}"
+      params: "{{ komodo_api_params }}"
+    status_code: "{{ komodo_api_status | default([200]) }}"
+  register: komodo_api_result
+  no_log: true
