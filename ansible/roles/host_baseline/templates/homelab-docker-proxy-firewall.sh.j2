@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+chain=HOMELAB-MONITORING
+
+remove_chain() {
+  iptables -w -D DOCKER-USER -j "$chain" 2>/dev/null || true
+  iptables -w -F "$chain" 2>/dev/null || true
+  iptables -w -X "$chain" 2>/dev/null || true
+}
+
+case "${1:-start}" in
+  start)
+    remove_chain
+    iptables -w -N "$chain"
+    iptables -w -A "$chain" \
+      -i {{ homelab_security_tailscale_interface }} \
+      -s {{ homelab_docker_proxy_source_ip }} \
+      -p tcp --dport {{ homelab_docker_proxy_container_port }} \
+      -j ACCEPT
+    iptables -w -A "$chain" \
+      -p tcp --dport {{ homelab_docker_proxy_container_port }} \
+      -j DROP
+    iptables -w -A "$chain" -j RETURN
+    iptables -w -I DOCKER-USER 1 -j "$chain"
+    ;;
+  stop)
+    remove_chain
+    ;;
+  *)
+    echo "usage: $0 [start|stop]" >&2
+    exit 2
+    ;;
+esac

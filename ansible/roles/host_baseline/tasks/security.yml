@@ -1,0 +1,21 @@
+---
+- name: Apply geerlingguy.security baseline
+  ansible.builtin.include_role:
+    name: geerlingguy.security
+  when: homelab_security_ssh_hardening_enabled | bool
+
+- name: Enable unattended security updates on non-OpenSSH Debian hosts
+  ansible.builtin.include_role:
+    name: geerlingguy.security
+    tasks_from: autoupdate-Debian
+  when:
+    - not homelab_security_ssh_hardening_enabled | bool
+    - homelab_security_unattended_upgrades_enabled | bool
+    - ansible_facts.os_family == "Debian"
+
+- name: Remove superseded OpenSSH hardening drop-in
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/99-homelab-hardening.conf
+    state: absent
+  notify: Reload ssh
+  when: homelab_security_ssh_hardening_enabled | bool

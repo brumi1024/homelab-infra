@@ -1,0 +1,452 @@
+---
+- name: Start with a clean verification failure list
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: []
+  tags: always
+
+# --- security -----------------------------------------------------------
+
+- name: Read effective OpenSSH server configuration
+  ansible.builtin.command: sshd -T
+  register: host_baseline_verify_sshd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_security_ssh_hardening_enabled | bool
+  tags: security
+
+- name: Record OpenSSH password, X11, or root login hardening gaps
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' OpenSSH is not hardened (password auth, X11 forwarding, or root login).']
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_security_ssh_hardening_enabled | bool
+    - host_baseline_verify_sshd.rc == 0
+    - >-
+      'passwordauthentication no' not in host_baseline_verify_sshd.stdout
+      or 'x11forwarding no' not in host_baseline_verify_sshd.stdout
+      or 'permitrootlogin yes' in host_baseline_verify_sshd.stdout
+  tags: security
+
+- name: List listening TCP sockets
+  ansible.builtin.command: ss -ltnH
+  register: host_baseline_verify_tcp_listeners
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['komodo']
+  tags: security
+
+- name: Record forbidden ports bound to all interfaces
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' exposes TCP port ' ~ item ~ ' on all interfaces.'] }}"
+  loop: "{{ homelab_security_forbidden_public_tcp_ports }}"
+  when:
+    - inventory_hostname in groups['komodo']
+    - >-
+      host_baseline_verify_tcp_listeners.stdout_lines
+      | select('search', '(^|\\s)(0\\.0\\.0\\.0|\\[::\\]|\\*)' ~ ':' ~ item ~ '\\s')
+      | list
+      | length > 0
+  tags: security
+
+- name: Verify fail2ban unit is active on hardened OpenSSH hosts
+  ansible.builtin.systemd:
+    name: fail2ban.service
+  register: host_baseline_verify_fail2ban
+  changed_when: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_security_ssh_hardening_enabled | bool
+    - security_fail2ban_enabled | bool
+  tags: security
+
+- name: Record fail2ban unit not active
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' fail2ban.service is not active.'] }}"
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_security_ssh_hardening_enabled | bool
+    - security_fail2ban_enabled | bool
+    - host_baseline_verify_fail2ban.status.ActiveState != 'active'
+  tags: security
+
+- name: Verify homelab input firewall unit is active
+  ansible.builtin.systemd:
+    name: homelab-input-firewall.service
+  register: host_baseline_verify_input_firewall
+  changed_when: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_security_input_firewall_enabled | bool
+  tags: security
+
+- name: Record homelab input firewall unit not active
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' homelab-input-firewall.service is not active.'] }}"
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_security_input_firewall_enabled | bool
+    - host_baseline_verify_input_firewall.status.ActiveState != 'active'
+  tags: security
+
+- name: Resolve the Docker proxy source address
+  ansible.builtin.include_tasks: discover_core_tailnet_ip.yml
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_proxy_firewall_enabled | bool
+  tags: security
+
+- name: Verify Docker proxy firewall unit is active
+  ansible.builtin.systemd:
+    name: homelab-docker-proxy-firewall.service
+  register: host_baseline_verify_docker_proxy_firewall
+  changed_when: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_proxy_firewall_enabled | bool
+  tags: security
+
+- name: Read Docker proxy firewall rules
+  ansible.builtin.command: iptables -w -S HOMELAB-MONITORING
+  register: host_baseline_verify_docker_proxy_rules
+  changed_when: false
+  check_mode: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_proxy_firewall_enabled | bool
+  tags: security
+
+- name: Record Docker proxy not restricted to the homelab VPS
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' does not restrict its Docker proxy to the homelab VPS.'] }}"
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_proxy_firewall_enabled | bool
+    - >-
+      host_baseline_verify_docker_proxy_firewall.status.ActiveState != 'active'
+      or ('-s ' ~ homelab_docker_proxy_source_ip ~ '/32') not in host_baseline_verify_docker_proxy_rules.stdout
+      or ('--dport ' ~ homelab_docker_proxy_container_port ~ ' -j DROP') not in host_baseline_verify_docker_proxy_rules.stdout
+  tags: security
+
+# --- reliability ----------------------------------------------------------
+
+- name: Check Docker service state
+  ansible.builtin.systemd:
+    name: docker.service
+  register: host_baseline_verify_docker
+  changed_when: false
+  when: inventory_hostname in groups['komodo']
+  tags: reliability
+
+- name: Record Docker service not active
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' docker.service is not active.'] }}"
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_docker.status.ActiveState != 'active'
+  tags: reliability
+
+- name: Check Tailscale service state
+  ansible.builtin.systemd:
+    name: tailscaled.service
+  register: host_baseline_verify_tailscale
+  changed_when: false
+  failed_when: false
+  when: inventory_hostname in groups['komodo']
+  tags: reliability
+
+- name: Record Tailscale service not active
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' tailscaled.service is installed but not active.'] }}"
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale is not failed
+    - host_baseline_verify_tailscale.status.ActiveState != 'active'
+  tags: reliability
+
+- name: Check failed system services  # noqa command-instead-of-module
+  ansible.builtin.command: systemctl --failed --no-legend
+  register: host_baseline_verify_failed_units
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['komodo']
+  tags: reliability
+
+- name: Record failed system services
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' has failed units: ' ~ (host_baseline_verify_failed_units.stdout_lines | join(', '))]
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_failed_units.stdout_lines | length > 0
+  tags: reliability
+
+- name: Check unhealthy containers
+  ansible.builtin.shell: >-
+    docker ps --filter health=unhealthy
+    --format '{{ "{{.Names}}" }}'
+  register: host_baseline_verify_unhealthy_containers
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['komodo']
+  tags: reliability
+
+- name: Record unhealthy containers
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' has unhealthy containers: ' ~ (host_baseline_verify_unhealthy_containers.stdout_lines | join(', '))]
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_unhealthy_containers.stdout_lines | length > 0
+  tags: reliability
+
+# --- dns --------------------------------------------------------------
+
+- name: Resolve a public name through the host resolver
+  ansible.builtin.command:
+    argv:
+      - getent
+      - hosts
+      - "{{ homelab_host_dns_public_probe }}"
+  register: host_baseline_verify_dns_public
+  check_mode: false
+  changed_when: false
+  failed_when: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+  tags: dns
+
+- name: Resolve this host's own tailnet name
+  ansible.builtin.command:
+    argv:
+      - getent
+      - hosts
+      - "{{ inventory_hostname }}.{{ homelab_tailnet }}"
+  register: host_baseline_verify_dns_tailnet
+  check_mode: false
+  changed_when: false
+  failed_when: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+  tags: dns
+
+- name: Record a broken host resolver
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [
+            'Host resolver is broken on ' ~ inventory_hostname ~ ': public='
+            ~ ('ok' if host_baseline_verify_dns_public.rc == 0 else 'FAIL')
+            ~ ' tailnet=' ~ ('ok' if host_baseline_verify_dns_tailnet.rc == 0 else 'FAIL')
+          ]
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_public.rc != 0 or host_baseline_verify_dns_tailnet.rc != 0
+  tags: dns
+
+# --- komodo -------------------------------------------------------------
+
+- name: Require the local Core endpoint
+  ansible.builtin.uri:
+    url: "{{ komodo_core_local_health_url }}"
+    method: GET
+    status_code: 200
+    timeout: 5
+  register: host_baseline_verify_core_health
+  check_mode: false
+  changed_when: false
+  failed_when: false
+  when: inventory_hostname in groups['core']
+  tags: komodo
+
+- name: Record Core local health endpoint not responding
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' Komodo Core is not responding on its local health endpoint.'] }}"
+  when:
+    - inventory_hostname in groups['core']
+    - host_baseline_verify_core_health.status | default(0) != 200
+  tags: komodo
+
+- name: Check Periphery systemd service status
+  ansible.builtin.systemd:
+    name: periphery
+    scope: user
+  become: true
+  become_user: "{{ komodo_user }}"
+  register: host_baseline_verify_periphery_status
+  failed_when: false
+  when: inventory_hostname in groups['periphery']
+  tags: komodo
+
+- name: Record Periphery service not active
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' Periphery is not active.'] }}"
+  when:
+    - inventory_hostname in groups['periphery']
+    - host_baseline_verify_periphery_status.status.ActiveState | default('') != 'active'
+  tags: komodo
+
+- name: Check Periphery outbound connections
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -Htnp
+      - state
+      - established
+  become: true
+  register: host_baseline_verify_periphery_connections
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['periphery']
+  tags: komodo
+
+- name: Record Periphery missing its WebSocket connection to Core
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' Periphery has no live WebSocket connection to Komodo Core.'] }}"
+  when:
+    - inventory_hostname in groups['periphery']
+    - >-
+      host_baseline_verify_periphery_connections.stdout_lines
+      | select('search', 'periphery')
+      | select('search', ':443')
+      | list
+      | length == 0
+  tags: komodo
+
+- name: Query Komodo server states
+  ansible.builtin.uri:
+    url: "{{ komodo_public_url }}/read"
+    method: POST
+    headers:
+      X-Api-Key: "{{ komodo_core_api_key }}"
+      X-Api-Secret: "{{ komodo_core_api_secret }}"
+      Content-Type: application/json
+    body_format: json
+    body:
+      type: ListServers
+      params: {}
+    status_code: 200
+    timeout: 10
+  register: host_baseline_verify_server_list
+  check_mode: false
+  no_log: true
+  when: inventory_hostname == 'localhost'
+  tags: komodo
+
+- name: Identify Periphery nodes missing or unhealthy in Komodo
+  ansible.builtin.set_fact:
+    host_baseline_verify_komodo_expected_servers: >-
+      {{
+        host_baseline_verify_server_list.json
+        | selectattr('name', 'in', groups['periphery'])
+        | list
+      }}
+  no_log: true
+  when: inventory_hostname == 'localhost'
+  tags: komodo
+
+- name: Record Periphery nodes missing or unhealthy in Komodo
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + (
+            ['Komodo does not see every Periphery node as OK: missing '
+             ~ (host_baseline_verify_komodo_missing | join(', ') | default('none', true))
+             ~ ', not OK ' ~ (host_baseline_verify_komodo_unhealthy | join(', ') | default('none', true))]
+            if (host_baseline_verify_komodo_missing | length > 0 or host_baseline_verify_komodo_unhealthy | length > 0)
+            else []
+          )
+      }}
+  vars:
+    host_baseline_verify_komodo_missing: >-
+      {{
+        groups['periphery']
+        | difference(host_baseline_verify_komodo_expected_servers | map(attribute='name') | list)
+      }}
+    host_baseline_verify_komodo_unhealthy: >-
+      {{
+        host_baseline_verify_komodo_expected_servers
+        | rejectattr('info.state', 'equalto', 'Ok')
+        | map(attribute='name')
+        | list
+      }}
+  when: inventory_hostname == 'localhost'
+  tags: komodo
+
+# --- proxmox --------------------------------------------------------------
+
+- name: Check Proxmox firewall state
+  ansible.builtin.command: pve-firewall status
+  register: host_baseline_verify_pve_firewall
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['proxmox']
+  tags: proxmox
+
+- name: Record Proxmox firewall not enabled and running
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' Proxmox firewall is not enabled/running.'] }}"
+  when:
+    - inventory_hostname in groups['proxmox']
+    - "'Status: enabled/running' not in host_baseline_verify_pve_firewall.stdout"
+  tags: proxmox
+
+- name: Check Proxmox storage state
+  ansible.builtin.command: pvesm status
+  register: host_baseline_verify_pvesm
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['proxmox']
+  tags: proxmox
+
+- name: Record inactive Proxmox storage
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' has inactive Proxmox storage.'] }}"
+  when:
+    - inventory_hostname in groups['proxmox']
+    - "' inactive ' in host_baseline_verify_pvesm.stdout"
+  tags: proxmox
+
+- name: List root MFA factors
+  ansible.builtin.command: pveum user tfa list root@pam
+  register: host_baseline_verify_root_tfa
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['proxmox']
+  tags: proxmox
+
+- name: Record root missing TOTP or WebAuthn
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' root@pam is missing TOTP or WebAuthn.'] }}"
+  when:
+    - inventory_hostname in groups['proxmox']
+    - "'totp:' not in host_baseline_verify_root_tfa.stdout or 'webauthn:' not in host_baseline_verify_root_tfa.stdout"
+  tags: proxmox
+
+# --- result ---------------------------------------------------------------
+
+- name: Require every verification check to have passed
+  ansible.builtin.assert:
+    that:
+      - host_baseline_verify_failures | length == 0
+    fail_msg: "{{ host_baseline_verify_failures }}"
+  tags: always

@@ -1,0 +1,12 @@
+---
+- name: Include security tasks
+  ansible.builtin.include_tasks: security.yml
+
+- name: Include firewall tasks
+  ansible.builtin.include_tasks: firewall.yml
+
+- name: Include reliability tasks
+  ansible.builtin.include_tasks: reliability.yml
+
+- name: Include dns tasks
+  ansible.builtin.include_tasks: dns.yml

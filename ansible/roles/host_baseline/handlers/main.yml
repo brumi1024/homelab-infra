@@ -1,0 +1,29 @@
+---
+- name: Reload ssh
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+  when: ansible_facts.service_mgr != "unknown"
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart homelab input firewall
+  ansible.builtin.systemd:
+    name: homelab-input-firewall.service
+    enabled: true
+    state: restarted
+  when: homelab_security_input_firewall_enabled | bool
+
+- name: Restart homelab Docker proxy firewall
+  ansible.builtin.systemd:
+    name: homelab-docker-proxy-firewall.service
+    enabled: true
+    state: restarted
+  when: homelab_docker_proxy_firewall_enabled | bool
+
+- name: Restart tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled.service
+    state: restarted

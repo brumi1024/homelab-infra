@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+
+delete_table() {
+  if nft list table inet homelab_filter >/dev/null 2>&1; then
+    nft delete table inet homelab_filter
+  fi
+}
+
+case "${1:-start}" in
+  start)
+    delete_table
+    nft add table inet homelab_filter
+    nft 'add chain inet homelab_filter input { type filter hook input priority -50; policy accept; }'
+    nft add rule inet homelab_filter input ct state established,related accept
+    nft add rule inet homelab_filter input iifname lo accept
+{% if homelab_security_allow_tailscale | bool %}
+    nft add rule inet homelab_filter input iifname {{ homelab_security_tailscale_interface }} accept
+{% endif %}
+    nft add rule inet homelab_filter input meta nfproto ipv6 icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, echo-request, echo-reply, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+{% for port in homelab_security_public_tcp_ports %}
+    nft add rule inet homelab_filter input tcp dport {{ port }} accept
+{% endfor %}
+{% for port in homelab_security_public_udp_ports %}
+    nft add rule inet homelab_filter input udp dport {{ port }} accept
+{% endfor %}
+    nft add rule inet homelab_filter input counter drop
+    ;;
+  stop)
+    delete_table
+    ;;
+  *)
+    echo "usage: $0 [start|stop]" >&2
+    exit 2
+    ;;
+esac

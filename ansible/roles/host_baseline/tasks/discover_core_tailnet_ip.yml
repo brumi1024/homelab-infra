@@ -1,0 +1,32 @@
+---
+# The Docker proxy firewall pins the read-only Docker API to the Core host.
+# iptables source matching needs a literal address, but the inventory should not
+# carry one: a Tailscale address changes whenever a node is re-enrolled, and a
+# stale value fails open-ish by permitting a machine that no longer exists.
+#
+# Ask the Core host for its own address instead, so the literal only ever exists
+# in the rendered firewall script.
+# Deliberately not run_once: combining run_once with the caller's conditional
+# skips the task outright when the play's first host does not need it.
+- name: Discover the Core host Tailscale address
+  ansible.builtin.command: tailscale ip -4
+  register: host_baseline_core_tailnet_ip_result
+  changed_when: false
+  check_mode: false
+  delegate_to: "{{ groups['core'] | first }}"
+
+# The rendered firewall script templates this variable by name, so it cannot
+# take the role prefix var-naming would otherwise require.
+- name: Set the Docker proxy source address  # noqa: var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    homelab_docker_proxy_source_ip: >-
+      {{ host_baseline_core_tailnet_ip_result.stdout_lines | first | trim }}
+
+- name: Require a Tailscale address for the Core host
+  ansible.builtin.assert:
+    that:
+      - homelab_docker_proxy_source_ip is match('^100\\.(6[4-9]|[7-9][0-9]|1[0-2][0-7])\\.')
+    fail_msg: >-
+      {{ groups['core'] | first }} did not report a Tailscale address
+      (got '{{ homelab_docker_proxy_source_ip }}'). Check that tailscaled is
+      running there before applying the firewall.

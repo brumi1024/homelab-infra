@@ -1,0 +1,48 @@
+---
+- name: Resolve the Docker proxy source address
+  ansible.builtin.include_tasks: discover_core_tailnet_ip.yml
+  when: homelab_docker_proxy_firewall_enabled | bool
+
+- name: Configure homelab input firewall script
+  ansible.builtin.template:
+    src: homelab-input-firewall.sh.j2
+    dest: /usr/local/sbin/homelab-input-firewall
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart homelab input firewall
+  when: homelab_security_input_firewall_enabled | bool
+
+- name: Configure homelab input firewall service
+  ansible.builtin.template:
+    src: homelab-input-firewall.service.j2
+    dest: /etc/systemd/system/homelab-input-firewall.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart homelab input firewall
+  when: homelab_security_input_firewall_enabled | bool
+
+- name: Configure Docker proxy firewall script
+  ansible.builtin.template:
+    src: homelab-docker-proxy-firewall.sh.j2
+    dest: /usr/local/sbin/homelab-docker-proxy-firewall
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart homelab Docker proxy firewall
+  when: homelab_docker_proxy_firewall_enabled | bool
+
+- name: Configure Docker proxy firewall service
+  ansible.builtin.template:
+    src: homelab-docker-proxy-firewall.service.j2
+    dest: /etc/systemd/system/homelab-docker-proxy-firewall.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart homelab Docker proxy firewall
+  when: homelab_docker_proxy_firewall_enabled | bool
