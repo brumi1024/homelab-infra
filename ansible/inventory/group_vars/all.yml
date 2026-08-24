@@ -22,7 +22,7 @@ komodo_core_bind_addresses:
 # Komodo Periphery Settings (bpbradley.komodo v2.x, outbound connection mode)
 komodo_periphery_port: 8120
 # Track whatever version Core reports on its /version endpoint. Keeps Core/Periphery coupled
-# and makes `make periphery-upgrade` a no-argument way to re-align after a Core bump.
+# and makes `make upgrade` a no-argument way to re-align after a Core bump.
 komodo_periphery_version: "core"
 komodo_user: "komodo"
 komodo_group: "komodo"

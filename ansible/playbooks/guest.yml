@@ -1,0 +1,7 @@
+---
+- name: Manage a Proxmox LXC guest
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: proxmox_guest
+      tags: [guest]

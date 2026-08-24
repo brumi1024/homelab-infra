@@ -1,4 +1,4 @@
-.PHONY: help setup known-hosts lint syntax ping verify bootstrap baseline upgrade periphery-uninstall run
+.PHONY: help setup known-hosts lint syntax ping verify bootstrap baseline upgrade guest periphery-uninstall run
 
 ANSIBLE_DIR := ansible
 INVENTORY := inventory/hosts.yml
@@ -19,7 +19,13 @@ help: ## Show this help message
 setup: ## Install Python deps into .venv, Ansible collections and roles, create inventory/hosts.yml if missing
 	@python3 -m venv $(VENV)
 	@$(VENV_BIN)/pip install -q -r requirements.txt
-	@$(VENV_BIN)/ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles
+	@if [ -d ~/.ansible/collections/ansible_collections/community/general ] && \
+		[ ! -f ~/.ansible/collections/ansible_collections/community/general/MANIFEST.json ]; then \
+		quarantine=~/.local/state/homelab-infra/ansible-quarantine/community-general-$$(date -u +%Y%m%dT%H%M%SZ); \
+		mkdir -p "$$(dirname "$$quarantine")"; \
+		mv ~/.ansible/collections/ansible_collections/community/general "$$quarantine"; \
+	fi
+	@$(VENV_BIN)/ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles --force
 	@$(VENV_BIN)/ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
 	@command -v op >/dev/null 2>&1 || echo "1Password CLI (op) not found; secret lookups will fail"
 	@if [ ! -f $(ANSIBLE_DIR)/$(INVENTORY) ]; then \
@@ -45,7 +51,7 @@ syntax: ## Syntax-check every playbook against hosts.example.yml
 ping: ## Check connectivity to all hosts
 	@cd ansible && ansible all $(ANSIBLE_OPTS) $(EXTRA_VARS) -m ping
 
-verify: ## Run every read-only check (TAGS=security|reliability|dns|komodo|proxmox, LIMIT=host)
+verify: ## Run every read-only check (TAGS=security|reliability|tailscale|dns|komodo|proxmox, LIMIT=host)
 	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/verify.yml
 
 bootstrap: ## Install Docker, Core, auth, Periphery, and GitOps. APPLY=1 to mutate, otherwise --check --diff
@@ -56,6 +62,19 @@ baseline: ## Apply the host baseline. APPLY=1 to mutate, otherwise --check --dif
 
 upgrade: ## Upgrade Core then Periphery. APPLY=1 to mutate, otherwise --check --diff
 	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/upgrade.yml $(if $(APPLY),,--check --diff)
+
+guest: ## Create, snapshot, or resize an LXC. Set GUEST_ACTION; APPLY=1 to mutate, otherwise --check --diff
+	@if [ -z "$(GUEST_ACTION)" ]; then \
+		echo "GUEST_ACTION required (create, snapshot, or resize)"; \
+		exit 1; \
+	fi
+	@if [ "$(APPLY)" = "1" ]; then \
+		cd $(ANSIBLE_DIR) && APPLY=1 $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) \
+			-e "proxmox_guest_action=$(GUEST_ACTION) proxmox_guest_apply=true" playbooks/guest.yml; \
+	else \
+		cd $(ANSIBLE_DIR) && APPLY=0 $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) \
+			-e "proxmox_guest_action=$(GUEST_ACTION) proxmox_guest_apply=false" --check --diff playbooks/guest.yml; \
+	fi
 
 periphery-uninstall: ## Remove Komodo Periphery from every node. Requires APPLY=1
 	@if [ -z "$(APPLY)" ]; then \

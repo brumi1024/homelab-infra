@@ -49,9 +49,9 @@ Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
 ## Roles and playbooks
 
-Six roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (security, firewall, reliability, DNS, and their read-only verification).
+Seven roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (security, firewall, reliability, DNS, and their read-only verification), and `proxmox_guest` (recurring LXC create, snapshot, and resize operations).
 
-Four playbooks compose them; each is idempotent and safe to re-run.
+Five playbooks compose them; each is idempotent and safe to re-run.
 
 | Playbook | Effect | Mutates by default |
 | --- | --- | --- |
@@ -59,6 +59,7 @@ Four playbooks compose them; each is idempotent and safe to re-run.
 | `baseline.yml` | applies `host_baseline` on `komodo`, verifies it on `proxmox` | yes, `APPLY=1` required |
 | `verify.yml` | every read-only check, tagged `security`, `reliability`, `dns`, `komodo`, `proxmox` | no |
 | `upgrade.yml` | Core with a fresh image pull, then Periphery tracking `komodo_periphery_version` | yes, `APPLY=1` required |
+| `guest.yml` | create or snapshot an LXC through the Proxmox API, or resize its rootfs through `pct` over SSH | yes, `APPLY=1` required |
 
 ## Secrets flow
 
@@ -73,5 +74,5 @@ Four playbooks compose them; each is idempotent and safe to re-run.
   On a tailnet an address is only reachable while `tailscaled` runs, which is exactly when MagicDNS also works, so a literal address survives no outage that the name does not.
 - **Outbound Periphery.** Hosts behind NAT or on other sites need no exposed port; only Core needs a public endpoint.
 - **Core bound to localhost.** TLS, authentication, and rate limiting are the reverse proxy's job.
-- **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make periphery-upgrade` keeps the fleet aligned.
+- **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make upgrade` keeps the fleet aligned.
 - **Compose project name.** Stacks are named by `komodo_compose_project_name`, so manual `docker compose` calls need `-p` and `--env-file compose.env` to find them.

@@ -8,6 +8,7 @@
       ansible.builtin.include_role:
         name: host_baseline
         tasks_from: verify
+      tags: always
 
 - name: Verify Komodo Core sees every Periphery node
   hosts: localhost
@@ -17,3 +18,4 @@
       ansible.builtin.include_role:
         name: host_baseline
         tasks_from: verify
+      tags: always

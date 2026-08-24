@@ -1,0 +1,1 @@
+../../.agents/skills/komodo-stack-lifecycle/references/remove-stack.md

@@ -159,16 +159,160 @@
   changed_when: false
   failed_when: false
   when: inventory_hostname in groups['komodo']
-  tags: reliability
+  tags: [reliability, tailscale]
 
 - name: Record Tailscale service not active
   ansible.builtin.set_fact:
     host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' tailscaled.service is installed but not active.'] }}"
   when:
     - inventory_hostname in groups['komodo']
-    - host_baseline_verify_tailscale is not failed
-    - host_baseline_verify_tailscale.status.ActiveState != 'active'
-  tags: reliability
+    - host_baseline_verify_tailscale.status.ActiveState | default('') != 'active'
+  tags: [reliability, tailscale]
+
+- name: Read Tailscale status on managed hosts
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - status
+      - --json
+  register: host_baseline_verify_tailscale_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: inventory_hostname in groups['komodo']
+  tags: tailscale
+
+- name: Record unavailable Tailscale status on managed hosts
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{ host_baseline_verify_failures + [inventory_hostname ~ ' tailscale status --json did not return successfully.'] }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_status.rc != 0 or host_baseline_verify_tailscale_status.stdout | length == 0
+  tags: tailscale
+
+- name: Parse Tailscale status on managed hosts
+  ansible.builtin.set_fact:
+    host_baseline_verify_tailscale_status_json: "{{ host_baseline_verify_tailscale_status.stdout | from_json }}"
+  no_log: true
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_status.rc == 0
+    - host_baseline_verify_tailscale_status.stdout | length > 0
+  tags: tailscale
+
+- name: Extract the Tailscale self key expiry
+  ansible.builtin.set_fact:
+    host_baseline_verify_tailscale_key_expiry: >-
+      {{ host_baseline_verify_tailscale_status_json.Self.KeyExpiry | default('', true) }}
+  no_log: true
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_status.rc == 0
+    - host_baseline_verify_tailscale_status.stdout | length > 0
+  tags: tailscale
+
+- name: Accept a Tailscale self key with expiry disabled
+  ansible.builtin.set_fact:
+    host_baseline_verify_tailscale_key_expiry_ok: true
+  no_log: true
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_status.rc == 0
+    - host_baseline_verify_tailscale_key_expiry == '0001-01-01T00:00:00Z'
+  tags: tailscale
+
+- name: Determine whether the Tailscale self key remains valid
+  ansible.builtin.set_fact:
+    host_baseline_verify_tailscale_key_expiry_ok: >-
+      {{
+        (
+          (
+            host_baseline_verify_tailscale_key_expiry
+            | regex_replace('\\.[0-9]+Z$', 'Z')
+            | to_datetime('%Y-%m-%dT%H:%M:%SZ')
+          )
+          -
+          (
+            ansible_date_time.iso8601
+            | regex_replace('\\.[0-9]+Z$', 'Z')
+            | to_datetime('%Y-%m-%dT%H:%M:%SZ')
+          )
+        ).total_seconds() > (30 * 24 * 60 * 60)
+      }}
+  no_log: true
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_status.rc == 0
+    - host_baseline_verify_tailscale_key_expiry | length > 0
+    - host_baseline_verify_tailscale_key_expiry != '0001-01-01T00:00:00Z'
+  tags: tailscale
+
+- name: Record a Tailscale self key expiring within 30 days
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{ host_baseline_verify_failures + [inventory_hostname ~ ' Tailscale self key expires within 30 days.'] }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_status.rc == 0
+    - not host_baseline_verify_tailscale_key_expiry_ok | default(false) | bool
+  tags: tailscale
+
+- name: Read Tailscale status on the control host
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - status
+      - --json
+  register: host_baseline_verify_control_tailscale_status
+  become: false
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: inventory_hostname == 'localhost'
+  tags: tailscale
+
+- name: Record unavailable control-host Tailscale status
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{ host_baseline_verify_failures + ['Control host tailscale status --json did not return successfully.'] }}
+  when:
+    - inventory_hostname == 'localhost'
+    - host_baseline_verify_control_tailscale_status.rc != 0 or host_baseline_verify_control_tailscale_status.stdout | length == 0
+  tags: tailscale
+
+- name: Parse control-host Tailscale status
+  ansible.builtin.set_fact:
+    host_baseline_verify_control_tailscale_status_json: "{{ host_baseline_verify_control_tailscale_status.stdout | from_json }}"
+  no_log: true
+  when:
+    - inventory_hostname == 'localhost'
+    - host_baseline_verify_control_tailscale_status.rc == 0
+    - host_baseline_verify_control_tailscale_status.stdout | length > 0
+  tags: tailscale
+
+- name: Summarize offline Tailscale peers on the control host
+  ansible.builtin.debug:
+    msg: >-
+      Control-host Tailscale offline peers ({{ host_baseline_verify_control_tailscale_offline_peers | length }}):
+      {{ host_baseline_verify_control_tailscale_offline_peers | join(', ') | default('none', true) }}
+  vars:
+    host_baseline_verify_control_tailscale_offline_peers: >-
+      {{
+        host_baseline_verify_control_tailscale_status_json.Peer | default({})
+        | dict2items
+        | selectattr('value.Online', 'defined')
+        | selectattr('value.Online', 'equalto', false)
+        | map(attribute='value.HostName')
+        | map('default', 'unknown')
+        | list
+      }}
+  when:
+    - inventory_hostname == 'localhost'
+    - host_baseline_verify_control_tailscale_status.rc == 0
+  tags: tailscale
 
 - name: Check failed system services  # noqa command-instead-of-module
   ansible.builtin.command: systemctl --failed --no-legend

@@ -63,7 +63,7 @@ all:
               # homelab_security_ssh_hardening_enabled: false
               homelab_docker_proxy_firewall_enabled: true
 
-    # Optional. Proxmox hosts touched only by security_check / security_baseline.
+    # Optional. Proxmox hosts touched only by the read-only verify checks.
     proxmox:
       hosts:
         pve-1:
