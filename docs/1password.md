@@ -115,6 +115,20 @@ creation and snapshots.
 Grant the token only the permissions needed for the intended guest operations.
 The role never writes these values to a file or task log.
 
+### 7. SSH Break Glass
+
+**Item Name**: `SSH Break Glass`
+
+**Item Type**: SSH Key
+
+Generate one Ed25519 key directly in 1Password.
+The private key remains in 1Password and is used through the 1Password SSH agent.
+The infrastructure role reads only the public field.
+
+| Field Name | Type | Description |
+|------------|------|-------------|
+| `public key` | Text | OpenSSH Ed25519 public key installed on tier-0 hosts |
+
 ## Setup Instructions
 
 ### Step 1: Create Vault

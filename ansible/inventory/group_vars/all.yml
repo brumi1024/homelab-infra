@@ -72,6 +72,13 @@ homelab_security_public_tcp_ports: []
 homelab_security_public_udp_ports: []
 homelab_security_allow_tailscale: true
 homelab_security_tailscale_interface: tailscale0
+# Tailscale SSH is separately opt-in because this public repository cannot
+# assume that a configured host belongs to a tailnet with matching SSH rules.
+homelab_tailscale_ssh_managed: false
+homelab_tailscale_ssh_enabled: false
+homelab_ssh_break_glass_enabled: false
+homelab_ssh_break_glass_op_item: "SSH Break Glass"
+homelab_ssh_break_glass_op_field: "public key"
 homelab_docker_dns_enabled: true
 homelab_docker_dns_servers:
   - "100.100.100.100"

@@ -1,0 +1,3 @@
+---
+# Membership explicitly opts a host into SSH access management.
+homelab_tailscale_ssh_managed: true

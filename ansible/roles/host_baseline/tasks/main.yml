@@ -1,4 +1,12 @@
 ---
+- name: Include break-glass SSH tasks
+  ansible.builtin.include_tasks: break_glass.yml
+  tags: [ssh_access, break_glass]
+
+- name: Include Tailscale SSH tasks
+  ansible.builtin.include_tasks: tailscale_ssh.yml
+  tags: [ssh_access, tailscale]
+
 - name: Include security tasks
   ansible.builtin.include_tasks: security.yml
 

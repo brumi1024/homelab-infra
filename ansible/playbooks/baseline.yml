@@ -6,6 +6,23 @@
   roles:
     - role: host_baseline
 
+- name: Apply SSH access outside the Komodo baseline
+  hosts: ssh_access:!komodo
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run break-glass SSH tasks
+      ansible.builtin.include_role:
+        name: host_baseline
+        tasks_from: break_glass
+      tags: [ssh_access, break_glass]
+
+    - name: Run Tailscale SSH tasks
+      ansible.builtin.include_role:
+        name: host_baseline
+        tasks_from: tailscale_ssh
+      tags: [ssh_access, tailscale]
+
 - name: Verify the Proxmox baseline
   hosts: proxmox
   become: true
