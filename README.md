@@ -30,4 +30,4 @@ Both environments read the same 1Password vault and the same inventory shape; on
 
 - `docs/architecture.md`: how the pieces fit together, independent of any one deployment.
 - `docs/1password.md`: the 1Password items and fields this repository expects.
-- `CLAUDE.md`: the working agreement for coding agents operating this repository.
+- `AGENTS.md`: the working agreement for coding agents operating this repository.
