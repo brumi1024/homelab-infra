@@ -7,7 +7,7 @@ Public and forked: every commit is published for good.
 
 Read in this order; each layer answers a different question.
 
-1. The `agentic-notes` checkout: what is true right now, and how it got there. `Homelab Overview` (plus per-site notes beside it) is current state; `Infra/` is dated evidence, runbooks, and plans, indexed by `Infra/README.md`. It is its own git repo, synced through a private Forgejo repository, checked out on the operator machine and on `agent-infra`.
+1. The `agentic-notes` checkout: what is true right now, and how it got there. Its root `AGENTS.md` is the map: living state in `Estate/` and `Repos/` (one note per repository), work in flight in `Plans/`, load-bearing research in `Reference/`, post-mortems in `Incidents/`, closed records in `Archive/`. It is its own git repo, synced through a private Forgejo repository, checked out on the operator machine and on `agent-infra`.
 2. This repository: how to rebuild it. `docs/architecture.md` explains the shape without naming a deployment.
 
 `agent-infra` gets both layers once `~/projects/agentic-notes` is cloned there (a real clone, not a copy); until that lands its `CLAUDE.md` says it still has only layer 2.
@@ -39,8 +39,8 @@ Hosts are addressed by MagicDNS short name. Tailscale addresses, the tailnet dom
 - After verifying or changing live infrastructure, update the Obsidian overview or the relevant site note in the same session, where that layer exists.
 - Comments describe current state and rationale in one line; history belongs to git. Match the density of the file; default to no comment.
 - Markdown: one sentence per line, plain dashes, no em dash.
-- A one-off fix applied by SSH stays a one-off fix: record it in `Infra/` with the date and the host.
-  Record each ad hoc fix in `Infra/one-offs.md` so a second occurrence becomes a grep.
+- A one-off fix applied by SSH stays a one-off fix: record it in the vault with the date and the host.
+  Record each ad hoc fix in `Incidents/one-offs.md` so a second occurrence becomes a grep.
   Promote it into `host_baseline` (or the relevant role) only on its second occurrence, so the baseline grows from recurring gotchas, not single incidents.
 
 ## Gotchas no config confesses
