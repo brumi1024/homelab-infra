@@ -1,6 +1,6 @@
 ---
-- name: Verify the komodo and proxmox baselines
-  hosts: komodo:proxmox
+- name: Verify the managed host baselines
+  hosts: komodo:proxmox:ssh_access
   become: true
   gather_facts: true
   tasks:

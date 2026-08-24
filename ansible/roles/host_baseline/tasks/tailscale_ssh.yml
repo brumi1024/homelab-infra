@@ -1,0 +1,63 @@
+---
+- name: Read Tailscale preferences before managing SSH
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - debug
+      - prefs
+  register: host_baseline_tailscale_ssh_prefs
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when: homelab_tailscale_ssh_managed | bool
+  tags: [ssh_access, tailscale]
+
+- name: Parse the current Tailscale SSH preference
+  ansible.builtin.set_fact:
+    host_baseline_tailscale_ssh_current: >-
+      {{
+        (
+          host_baseline_tailscale_ssh_prefs.stdout
+          | from_json
+        ).RunSSH | default(false) | bool
+      }}
+  no_log: true
+  when: homelab_tailscale_ssh_managed | bool
+  tags: [ssh_access, tailscale]
+
+- name: Require APPLY=1 before changing Tailscale SSH
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_check_mode
+        or host_baseline_tailscale_ssh_current == (homelab_tailscale_ssh_enabled | bool)
+        or lookup('ansible.builtin.env', 'APPLY') == '1'
+    fail_msg: Tailscale SSH changes require APPLY=1.
+  when: homelab_tailscale_ssh_managed | bool
+  tags: [ssh_access, tailscale]
+
+- name: Report the planned Tailscale SSH change
+  ansible.builtin.debug:
+    msg: >-
+      Tailscale SSH would change from
+      {{ host_baseline_tailscale_ssh_current | bool }} to
+      {{ homelab_tailscale_ssh_enabled | bool }}.
+  changed_when: true
+  when:
+    - homelab_tailscale_ssh_managed | bool
+    - ansible_check_mode
+    - host_baseline_tailscale_ssh_current != (homelab_tailscale_ssh_enabled | bool)
+  tags: [ssh_access, tailscale]
+
+- name: Set the desired Tailscale SSH state
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - set
+      - "--ssh={{ homelab_tailscale_ssh_enabled | bool | ternary('true', 'false') }}"
+  changed_when: true
+  when:
+    - homelab_tailscale_ssh_managed | bool
+    - not ansible_check_mode
+    - host_baseline_tailscale_ssh_current != (homelab_tailscale_ssh_enabled | bool)
+  tags: [ssh_access, tailscale]

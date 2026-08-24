@@ -1,0 +1,48 @@
+---
+- name: Ensure the root SSH directory exists for break-glass access
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]
+
+- name: Read the break-glass public key from 1Password
+  ansible.builtin.set_fact:
+    host_baseline_break_glass_public_key: >-
+      {{
+        lookup(
+          'community.general.onepassword',
+          homelab_ssh_break_glass_op_item,
+          field=homelab_ssh_break_glass_op_field,
+          vault=homelab_op_vault
+        ).split()[:2] | join(' ')
+      }}
+  no_log: true
+  when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]
+
+- name: Validate the break-glass public key
+  ansible.builtin.assert:
+    that:
+      - host_baseline_break_glass_public_key is match('^(ssh-ed25519|sk-ssh-ed25519@openssh.com) [A-Za-z0-9+/=]+$')
+    fail_msg: >-
+      The configured 1Password field must contain an Ed25519 SSH public key.
+  no_log: true
+  when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]
+
+- name: Install the marker-owned break-glass public key
+  ansible.builtin.lineinfile:
+    path: /root/.ssh/authorized_keys
+    regexp: '^.*\s+homelab-break-glass$'
+    line: "{{ host_baseline_break_glass_public_key }} homelab-break-glass"
+    create: true
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]

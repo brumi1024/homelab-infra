@@ -18,6 +18,20 @@ all:
         localhost:
           ansible_connection: local
 
+    # Hosts whose Tailscale SSH state or break-glass key is managed.
+    # Membership is explicit so enabling these features never surprises a fork.
+    ssh_access:
+      hosts:
+        core-host:
+          homelab_tailscale_ssh_enabled: false
+        docker-1:
+          homelab_tailscale_ssh_enabled: false
+        docker-2:
+          homelab_tailscale_ssh_enabled: false
+        pve-1:
+          homelab_tailscale_ssh_enabled: false
+          homelab_ssh_break_glass_enabled: false
+
     komodo:
       children:
         # Exactly one Core host.

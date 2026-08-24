@@ -2,6 +2,11 @@
 - name: Start with a clean verification failure list
   ansible.builtin.set_fact:
     host_baseline_verify_failures: []
+    host_baseline_verify_tailscale_managed: >-
+      {{
+        inventory_hostname in groups.get('komodo', [])
+        or inventory_hostname in groups.get('ssh_access', [])
+      }}
   tags: always
 
 # --- security -----------------------------------------------------------
@@ -158,14 +163,14 @@
   register: host_baseline_verify_tailscale
   changed_when: false
   failed_when: false
-  when: inventory_hostname in groups['komodo']
+  when: host_baseline_verify_tailscale_managed | bool
   tags: [reliability, tailscale]
 
 - name: Record Tailscale service not active
   ansible.builtin.set_fact:
     host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' tailscaled.service is installed but not active.'] }}"
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale.status.ActiveState | default('') != 'active'
   tags: [reliability, tailscale]
 
@@ -180,7 +185,7 @@
   failed_when: false
   check_mode: false
   no_log: true
-  when: inventory_hostname in groups['komodo']
+  when: host_baseline_verify_tailscale_managed | bool
   tags: tailscale
 
 - name: Record unavailable Tailscale status on managed hosts
@@ -188,7 +193,7 @@
     host_baseline_verify_failures: >-
       {{ host_baseline_verify_failures + [inventory_hostname ~ ' tailscale status --json did not return successfully.'] }}
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale_status.rc != 0 or host_baseline_verify_tailscale_status.stdout | length == 0
   tags: tailscale
 
@@ -197,7 +202,7 @@
     host_baseline_verify_tailscale_status_json: "{{ host_baseline_verify_tailscale_status.stdout | from_json }}"
   no_log: true
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale_status.rc == 0
     - host_baseline_verify_tailscale_status.stdout | length > 0
   tags: tailscale
@@ -208,7 +213,7 @@
       {{ host_baseline_verify_tailscale_status_json.Self.KeyExpiry | default('', true) }}
   no_log: true
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale_status.rc == 0
     - host_baseline_verify_tailscale_status.stdout | length > 0
   tags: tailscale
@@ -218,7 +223,7 @@
     host_baseline_verify_tailscale_key_expiry_ok: true
   no_log: true
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale_status.rc == 0
     - host_baseline_verify_tailscale_key_expiry == '0001-01-01T00:00:00Z'
   tags: tailscale
@@ -243,7 +248,7 @@
       }}
   no_log: true
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale_status.rc == 0
     - host_baseline_verify_tailscale_key_expiry | length > 0
     - host_baseline_verify_tailscale_key_expiry != '0001-01-01T00:00:00Z'
@@ -254,10 +259,93 @@
     host_baseline_verify_failures: >-
       {{ host_baseline_verify_failures + [inventory_hostname ~ ' Tailscale self key expires within 30 days.'] }}
   when:
-    - inventory_hostname in groups['komodo']
+    - host_baseline_verify_tailscale_managed | bool
     - host_baseline_verify_tailscale_status.rc == 0
     - not host_baseline_verify_tailscale_key_expiry_ok | default(false) | bool
   tags: tailscale
+
+- name: Read Tailscale preferences for SSH verification
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - debug
+      - prefs
+  register: host_baseline_verify_tailscale_prefs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: homelab_tailscale_ssh_managed | bool
+  tags: [ssh_access, tailscale]
+
+- name: Record a Tailscale SSH preference mismatch
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' Tailscale SSH does not match the configured state.']
+      }}
+  when:
+    - homelab_tailscale_ssh_managed | bool
+    - >-
+      host_baseline_verify_tailscale_prefs.rc != 0
+      or (
+        (host_baseline_verify_tailscale_prefs.stdout | from_json).RunSSH
+        | default(false)
+        | bool
+      ) != (homelab_tailscale_ssh_enabled | bool)
+  tags: [ssh_access, tailscale]
+
+- name: Read the configured break-glass key for verification
+  ansible.builtin.set_fact:
+    host_baseline_verify_break_glass_line: >-
+      {{
+        lookup(
+          'community.general.onepassword',
+          homelab_ssh_break_glass_op_item,
+          field=homelab_ssh_break_glass_op_field,
+          vault=homelab_op_vault
+        ).split()[:2] | join(' ')
+        ~ ' homelab-break-glass'
+      }}
+  no_log: true
+  when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]
+
+- name: Read root authorized keys for break-glass verification
+  ansible.builtin.slurp:
+    path: /root/.ssh/authorized_keys
+  register: host_baseline_verify_authorized_keys
+  failed_when: false
+  no_log: true
+  when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]
+
+- name: Record a missing or duplicate break-glass key
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' does not have exactly one configured break-glass key.']
+      }}
+  vars:
+    host_baseline_verify_authorized_key_lines: >-
+      {{
+        (
+          host_baseline_verify_authorized_keys.content
+          | default('')
+          | b64decode
+        ).splitlines()
+      }}
+  when:
+    - homelab_ssh_break_glass_enabled | bool
+    - >-
+      host_baseline_verify_authorized_key_lines
+      | select('equalto', host_baseline_verify_break_glass_line)
+      | list
+      | length != 1
+  no_log: true
+  tags: [ssh_access, break_glass]
 
 - name: Read Tailscale status on the control host
   ansible.builtin.command:

@@ -40,6 +40,7 @@ A fork takes the shape unchanged, supplies its own `hosts.yml` and 1Password vau
 | Group | Purpose | Playbooks that target it |
 | --- | --- | --- |
 | `control` | the operator machine, `localhost` | auth, gitops, verify |
+| `ssh_access` | hosts whose Tailscale SSH state or break-glass key is explicitly managed | baseline, verify |
 | `komodo` | every managed host (`core` and `periphery` combined) | bootstrap (docker), baseline, verify |
 | `core` | exactly one Komodo Core host | bootstrap (core), upgrade |
 | `periphery` | every Periphery host | bootstrap (periphery), upgrade |
@@ -49,15 +50,15 @@ Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
 ## Roles and playbooks
 
-Seven roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (security, firewall, reliability, DNS, and their read-only verification), and `proxmox_guest` (recurring LXC create, snapshot, and resize operations).
+Seven roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (SSH access, security, firewall, reliability, DNS, and their read-only verification), and `proxmox_guest` (recurring LXC create, snapshot, and resize operations).
 
 Five playbooks compose them; each is idempotent and safe to re-run.
 
 | Playbook | Effect | Mutates by default |
 | --- | --- | --- |
 | `bootstrap.yml` | Docker on `komodo`, Core on `core`, auth on `localhost`, Core again to pick up the new API key, Periphery on `periphery`, GitOps on `localhost` | yes, `APPLY=1` required |
-| `baseline.yml` | applies `host_baseline` on `komodo`, verifies it on `proxmox` | yes, `APPLY=1` required |
-| `verify.yml` | every read-only check, tagged `security`, `reliability`, `dns`, `komodo`, `proxmox` | no |
+| `baseline.yml` | applies `host_baseline` on `komodo`, applies only SSH access tasks to other `ssh_access` hosts, and verifies Proxmox | yes, `APPLY=1` required |
+| `verify.yml` | every read-only check, including explicitly managed SSH access | no |
 | `upgrade.yml` | Core with a fresh image pull, then Periphery tracking `komodo_periphery_version` | yes, `APPLY=1` required |
 | `guest.yml` | create or snapshot an LXC through the Proxmox API, or resize its rootfs through `pct` over SSH | yes, `APPLY=1` required |
 
@@ -72,6 +73,8 @@ Five playbooks compose them; each is idempotent and safe to re-run.
 
 - **Names over addresses.** `ansible_host` is a resolvable name.
   On a tailnet an address is only reachable while `tailscaled` runs, which is exactly when MagicDNS also works, so a literal address survives no outage that the name does not.
+- **Two SSH lanes.** Tailscale SSH is the explicitly enabled normal path, while selected tier-0 hosts keep a marker-owned break-glass public key whose private half remains in 1Password.
+  The `ssh_access` group scopes those tasks without applying the rest of the host baseline to hypervisors or dedicated agent hosts.
 - **Outbound Periphery.** Hosts behind NAT or on other sites need no exposed port; only Core needs a public endpoint.
 - **Core bound to localhost.** TLS, authentication, and rate limiting are the reverse proxy's job.
 - **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make upgrade` keeps the fleet aligned.
