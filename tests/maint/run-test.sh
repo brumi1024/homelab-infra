@@ -56,6 +56,15 @@ case "$1" in
 esac
 EOF
 
+cat > "$fake_bin/gh" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "$1 $2" in
+    "pr list") exit 0 ;;
+    *) printf 'unexpected gh command: %s\n' "$*" >&2; exit 1 ;;
+esac
+EOF
+
 cat > "$fake_bin/curl" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail

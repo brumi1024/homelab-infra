@@ -35,7 +35,7 @@ manifest=$output_dir/manifest.tsv
 printf 'name\tstatus\n' > "$manifest"
 
 safe_name() {
-    printf '%s' "$1" | tr -cs '[:alnum:]._- ' '_' | tr ' ' '_'
+    printf '%s' "$1" | tr -cs '[:alnum:]. _-' '_' | tr ' ' '_'
 }
 
 record_skip() {

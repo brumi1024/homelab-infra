@@ -48,6 +48,7 @@ if [[ -s "$diff_file" || -s "$failed_file" ]]; then
 fi
 if [[ -z "$previous" && ! -s "$failed_file" ]]; then
     needs_model=0
+    compare_status=0
 fi
 
 reports_dir=$vault_dir/Infra/reports

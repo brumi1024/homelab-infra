@@ -19,7 +19,13 @@ help: ## Show this help message
 setup: ## Install Python deps into .venv, Ansible collections and roles, create inventory/hosts.yml if missing
 	@python3 -m venv $(VENV)
 	@$(VENV_BIN)/pip install -q -r requirements.txt
-	@$(VENV_BIN)/ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles
+	@if [ -d ~/.ansible/collections/ansible_collections/community/general ] && \
+		[ ! -f ~/.ansible/collections/ansible_collections/community/general/MANIFEST.json ]; then \
+		quarantine=~/.local/state/homelab-infra/ansible-quarantine/community-general-$$(date -u +%Y%m%dT%H%M%SZ); \
+		mkdir -p "$$(dirname "$$quarantine")"; \
+		mv ~/.ansible/collections/ansible_collections/community/general "$$quarantine"; \
+	fi
+	@$(VENV_BIN)/ansible-galaxy install -r $(ANSIBLE_DIR)/requirements.yml -p ~/.ansible/roles --force
 	@$(VENV_BIN)/ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
 	@command -v op >/dev/null 2>&1 || echo "1Password CLI (op) not found; secret lookups will fail"
 	@if [ ! -f $(ANSIBLE_DIR)/$(INVENTORY) ]; then \
