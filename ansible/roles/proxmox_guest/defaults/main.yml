@@ -1,0 +1,59 @@
+---
+# The role is deliberately data-driven so the operator can manage more than
+# the two agent containers described in the build log.
+proxmox_guest_action: create
+proxmox_guest_apply: false
+
+# The inventory name is used for pct fallback operations. The Proxmox API node
+# name is separate because an inventory alias does not have to equal its PVE
+# node name.
+proxmox_guest_pve_host: "{{ (groups.get('proxmox', []) | first) | default('') }}"
+proxmox_guest_node: ""
+proxmox_guest_api_host: ""
+proxmox_guest_api_port: 8006
+proxmox_guest_api_validate_certs: true
+proxmox_guest_api_timeout: 30
+
+# These lookups are evaluated only by mutating API tasks. The item and field
+# names are documented in docs/1password.md; values never enter repository
+# state or task output.
+proxmox_guest_op_item: "Proxmox"
+proxmox_guest_api_user: >-
+  {{ lookup('community.general.onepassword', proxmox_guest_op_item,
+            field='api_user', vault=homelab_op_vault) }}
+proxmox_guest_api_token_id: >-
+  {{ lookup('community.general.onepassword', proxmox_guest_op_item,
+            field='api_token_id', vault=homelab_op_vault) }}
+proxmox_guest_api_token_secret: >-
+  {{ lookup('community.general.onepassword', proxmox_guest_op_item,
+            field='api_token_secret', vault=homelab_op_vault) }}
+
+# Create settings, based on the Debian 13 LXC shape in agent-host-plan.md.
+proxmox_guest_vmid: null
+proxmox_guest_hostname: ""
+proxmox_guest_template: ""
+proxmox_guest_rootfs_storage: ""
+proxmox_guest_rootfs_size_gib: 32
+proxmox_guest_cores: 2
+proxmox_guest_memory_mib: 4096
+proxmox_guest_swap_mib: 1024
+proxmox_guest_unprivileged: true
+proxmox_guest_features:
+  - nesting=1
+  - keyctl=1
+proxmox_guest_onboot: true
+proxmox_guest_update_existing: false
+proxmox_guest_nameserver: ""
+proxmox_guest_searchdomain: null
+proxmox_guest_netif: {}
+proxmox_guest_pubkey: null
+
+# Snapshot settings.
+proxmox_guest_snapshot_name: "pre-change"
+proxmox_guest_snapshot_description: "Snapshot created by proxmox_guest"
+proxmox_guest_snapshot_vmstate: false
+proxmox_guest_snapshot_retention: 0
+
+# LXC rootfs resize is a pct operation because community.proxmox.proxmox_disk
+# intentionally supports Qemu disks only.
+proxmox_guest_resize_size_gib: null

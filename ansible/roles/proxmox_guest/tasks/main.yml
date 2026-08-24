@@ -1,0 +1,175 @@
+---
+- name: Validate the requested guest operation
+  ansible.builtin.assert:
+    that:
+      - proxmox_guest_action in ['create', 'snapshot', 'resize']
+    fail_msg: >-
+      proxmox_guest_action must be one of create, snapshot, or resize;
+      got {{ proxmox_guest_action | default('undefined') }}.
+
+- name: Enforce the explicit mutation gate
+  ansible.builtin.assert:
+    that:
+      - not (proxmox_guest_apply | bool) or (lookup('ansible.builtin.env', 'APPLY') | default('') == '1')
+    fail_msg: >-
+      Proxmox guest mutations require both proxmox_guest_apply=true and the
+      APPLY=1 environment gate. Use make guest for the normal dry-run path.
+
+- name: Decide whether a real guest operation is enabled
+  ansible.builtin.set_fact:
+    proxmox_guest_mutation_enabled: >-
+      {{
+        proxmox_guest_apply | bool
+        and lookup('ansible.builtin.env', 'APPLY') | default('') == '1'
+        and not ansible_check_mode
+      }}
+
+- name: Describe the guest operation without contacting Proxmox
+  ansible.builtin.debug:
+    msg:
+      - "DRY RUN: no guest will be created, snapshotted, or resized."
+      - "Requested action: {{ proxmox_guest_action }}"
+      - "Create uses community.proxmox.proxmox with explicit nameserver and searchdomain."
+      - "Snapshot uses community.proxmox.proxmox_snap with API-token authentication."
+      - "Resize uses pct resize over SSH to the Proxmox host because the collection disk module supports Qemu disks only."
+      - "Run with APPLY=1 only after reviewing the rendered operation and taking the required operator snapshot."
+  when: not proxmox_guest_mutation_enabled
+
+- name: Validate create inputs
+  ansible.builtin.assert:
+    that:
+      - proxmox_guest_vmid is not none
+      - proxmox_guest_hostname | length > 0
+      - proxmox_guest_template | length > 0
+      - proxmox_guest_rootfs_storage | length > 0
+      - proxmox_guest_rootfs_size_gib | int > 0
+      - proxmox_guest_node | length > 0
+      - proxmox_guest_nameserver | length > 0
+      - proxmox_guest_netif | length > 0
+    fail_msg: >-
+      Create requires vmid, hostname, template, rootfs storage and size, PVE
+      node, netif, and an explicit nameserver. Never omit nameserver: PVE can
+      otherwise inherit the host's Tailscale resolver snapshot.
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action == 'create'
+
+- name: Validate snapshot inputs
+  ansible.builtin.assert:
+    that:
+      - proxmox_guest_vmid is not none
+      - proxmox_guest_snapshot_name | length > 0
+    fail_msg: Snapshot requires a VMID and non-empty snapshot name.
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action == 'snapshot'
+
+- name: Validate resize inputs
+  ansible.builtin.assert:
+    that:
+      - proxmox_guest_vmid is not none
+      - proxmox_guest_resize_size_gib is not none
+      - proxmox_guest_resize_size_gib | int > 0
+      - proxmox_guest_pve_host | length > 0
+    fail_msg: Resize requires a VMID, positive size in GiB, and a Proxmox inventory host.
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action == 'resize'
+
+- name: Resolve the Proxmox API endpoint from inventory when not overridden
+  ansible.builtin.set_fact:
+    proxmox_guest_api_target: >-
+      {{
+        proxmox_guest_api_host
+        if proxmox_guest_api_host | length > 0
+        else (
+          hostvars[proxmox_guest_pve_host].ansible_host
+          if proxmox_guest_pve_host in hostvars
+          else proxmox_guest_pve_host
+        )
+      }}
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action in ['create', 'snapshot']
+
+- name: Refuse an API operation without an endpoint
+  ansible.builtin.assert:
+    that:
+      - proxmox_guest_api_target | length > 0
+    fail_msg: Set proxmox_guest_api_host or define ansible_host for the Proxmox inventory host.
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action in ['create', 'snapshot']
+
+# The create path maps directly to the documented pct create shape. In
+# particular, nameserver is passed to the API rather than patched afterwards.
+- name: Create or reconcile an LXC through the Proxmox API
+  community.proxmox.proxmox:
+    api_host: "{{ proxmox_guest_api_target }}"
+    api_port: "{{ proxmox_guest_api_port }}"
+    api_timeout: "{{ proxmox_guest_api_timeout }}"
+    api_user: "{{ proxmox_guest_api_user }}"
+    api_token_id: "{{ proxmox_guest_api_token_id }}"
+    api_token_secret: "{{ proxmox_guest_api_token_secret }}"
+    validate_certs: "{{ proxmox_guest_api_validate_certs }}"
+    node: "{{ proxmox_guest_node }}"
+    vmid: "{{ proxmox_guest_vmid }}"
+    hostname: "{{ proxmox_guest_hostname }}"
+    ostemplate: "{{ proxmox_guest_template }}"
+    disk: "{{ proxmox_guest_rootfs_storage }}:{{ proxmox_guest_rootfs_size_gib }}"
+    ostype: debian
+    cores: "{{ proxmox_guest_cores }}"
+    memory: "{{ proxmox_guest_memory_mib }}"
+    swap: "{{ proxmox_guest_swap_mib }}"
+    features: "{{ proxmox_guest_features }}"
+    netif: "{{ proxmox_guest_netif }}"
+    nameserver: "{{ proxmox_guest_nameserver }}"
+    searchdomain: "{{ proxmox_guest_searchdomain }}"
+    onboot: "{{ proxmox_guest_onboot }}"
+    unprivileged: "{{ proxmox_guest_unprivileged }}"
+    pubkey: "{{ proxmox_guest_pubkey }}"
+    state: present
+    update: "{{ proxmox_guest_update_existing }}"
+  no_log: true
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action == 'create'
+
+# The snapshot module supports LXC snapshots and API-token auth when mount
+# points do not need the token-incompatible unbind workaround.
+- name: Create an LXC snapshot through the Proxmox API
+  community.proxmox.proxmox_snap:
+    api_host: "{{ proxmox_guest_api_target }}"
+    api_port: "{{ proxmox_guest_api_port }}"
+    api_timeout: "{{ proxmox_guest_api_timeout }}"
+    api_user: "{{ proxmox_guest_api_user }}"
+    api_token_id: "{{ proxmox_guest_api_token_id }}"
+    api_token_secret: "{{ proxmox_guest_api_token_secret }}"
+    validate_certs: "{{ proxmox_guest_api_validate_certs }}"
+    vmid: "{{ proxmox_guest_vmid }}"
+    snapname: "{{ proxmox_guest_snapshot_name }}"
+    description: "{{ proxmox_guest_snapshot_description }}"
+    vmstate: "{{ proxmox_guest_snapshot_vmstate }}"
+    retention: "{{ proxmox_guest_snapshot_retention }}"
+    state: present
+  no_log: true
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action == 'snapshot'
+
+# community.proxmox.proxmox_disk is intentionally a Qemu/KVM disk module and
+# cannot resize an LXC rootfs. pct is the supported fallback over SSH.
+- name: Resize an LXC rootfs through pct over SSH
+  ansible.builtin.command:
+    argv:
+      - pct
+      - resize
+      - "{{ proxmox_guest_vmid }}"
+      - rootfs
+      - "{{ proxmox_guest_resize_size_gib }}G"
+  delegate_to: "{{ proxmox_guest_pve_host }}"
+  become: true
+  changed_when: true
+  when:
+    - proxmox_guest_mutation_enabled
+    - proxmox_guest_action == 'resize'

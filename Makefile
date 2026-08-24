@@ -1,4 +1,4 @@
-.PHONY: help setup known-hosts lint syntax ping verify bootstrap baseline upgrade periphery-uninstall run
+.PHONY: help setup known-hosts lint syntax ping verify bootstrap baseline upgrade guest periphery-uninstall run
 
 ANSIBLE_DIR := ansible
 INVENTORY := inventory/hosts.yml
@@ -56,6 +56,19 @@ baseline: ## Apply the host baseline. APPLY=1 to mutate, otherwise --check --dif
 
 upgrade: ## Upgrade Core then Periphery. APPLY=1 to mutate, otherwise --check --diff
 	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/upgrade.yml $(if $(APPLY),,--check --diff)
+
+guest: ## Create, snapshot, or resize an LXC. Set GUEST_ACTION; APPLY=1 to mutate, otherwise --check --diff
+	@if [ -z "$(GUEST_ACTION)" ]; then \
+		echo "GUEST_ACTION required (create, snapshot, or resize)"; \
+		exit 1; \
+	fi
+	@if [ "$(APPLY)" = "1" ]; then \
+		cd $(ANSIBLE_DIR) && APPLY=1 $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) \
+			-e "proxmox_guest_action=$(GUEST_ACTION) proxmox_guest_apply=true" playbooks/guest.yml; \
+	else \
+		cd $(ANSIBLE_DIR) && APPLY=0 $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) \
+			-e "proxmox_guest_action=$(GUEST_ACTION) proxmox_guest_apply=false" --check --diff playbooks/guest.yml; \
+	fi
 
 periphery-uninstall: ## Remove Komodo Periphery from every node. Requires APPLY=1
 	@if [ -z "$(APPLY)" ]; then \

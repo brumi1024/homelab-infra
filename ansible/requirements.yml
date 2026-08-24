@@ -25,3 +25,8 @@ collections:
   # General utilities including 1Password lookups
   - name: community.general
     version: ">=8.0.0"
+
+  # Proxmox API modules for LXC creation and snapshots; LXC rootfs resize
+  # remains a pct-over-SSH fallback in the proxmox_guest role.
+  - name: community.proxmox
+    version: ">=2.0.0"

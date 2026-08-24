@@ -97,6 +97,24 @@ Every other target only reads; read access to the vault is enough for everything
 |------------|------|-------------|---------|
 | `credential` | Password | 1Password Connect service account token | `ops_xxxxxxxxxxxxxxxxxx` |
 
+### 6. Proxmox
+
+**Item Name**: `Proxmox`
+
+**Item Type**: API Credential or Login
+
+The `proxmox_guest` role reads these fields at run time for API-backed LXC
+creation and snapshots.
+
+| Field Name | Type | Description |
+|------------|------|-------------|
+| `api_user` | Text | Proxmox API user, including its realm, for example `root@pam` or a dedicated service user |
+| `api_token_id` | Text | Proxmox API token identifier |
+| `api_token_secret` | Password | Proxmox API token secret |
+
+Grant the token only the permissions needed for the intended guest operations.
+The role never writes these values to a file or task log.
+
 ## Setup Instructions
 
 ### Step 1: Create Vault
