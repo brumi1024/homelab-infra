@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Homelab maintenance verdict",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "summary",
+    "changes",
+    "stale_notes",
+    "suggested_actions"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "attention", "failed"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["host", "what", "evidence"],
+        "properties": {
+          "host": {"type": "string", "minLength": 1},
+          "what": {"type": "string", "minLength": 1},
+          "evidence": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "stale_notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["note", "claim", "observed"],
+        "properties": {
+          "note": {"type": "string", "minLength": 1},
+          "claim": {"type": "string", "minLength": 1},
+          "observed": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "suggested_actions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
