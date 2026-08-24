@@ -32,7 +32,7 @@ command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v python3 >/dev/null 2>&1 || die "python3 is required"
 
 backend=${MAINT_BACKEND:-}
-[[ -n "$backend" ]] || die 'MAINT_BACKEND must be set to claude or codex'
+[[ -n "$backend" ]] || die 'MAINT_BACKEND must be set to claude, codex, hermes, or local'
 
 max_budget=${MAINT_MAX_BUDGET_USD:-0.50}
 timeout_seconds=${MAINT_TIMEOUT_SECONDS:-1200}
@@ -41,10 +41,7 @@ timeout_seconds=${MAINT_TIMEOUT_SECONDS:-1200}
 [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || die "invalid MAINT_TIMEOUT_SECONDS: $timeout_seconds"
 
 case "$backend" in
-    claude|codex)
-        ;;
-    hermes|local)
-        die "backend '$backend' is reserved for a future OpenAI-compatible implementation"
+    claude|codex|hermes|local)
         ;;
     *)
         die "unsupported MAINT_BACKEND: $backend"
@@ -276,6 +273,62 @@ except (OSError, json.JSONDecodeError, ValidationError) as exc:
 PY
 }
 
+run_openai_compatible() {
+    local default_url=$1
+    local default_model=$2
+    local curl_bin
+    local base_url=${MAINT_OPENAI_BASE_URL:-$default_url}
+    local model=${MAINT_OPENAI_MODEL:-$default_model}
+    local max_input_bytes=${MAINT_OPENAI_MAX_INPUT_BYTES:-1048576}
+    local request_file=$tmp_dir/request.json
+    local auth_file=$tmp_dir/authorization.header
+    local -a curl_command
+
+    [[ "$base_url" == http://* || "$base_url" == https://* ]] || die 'MAINT_OPENAI_BASE_URL must use http or https'
+    [[ -n "$model" ]] || die 'MAINT_OPENAI_MODEL must not be empty'
+    [[ "$max_input_bytes" =~ ^[1-9][0-9]*$ ]] || die 'MAINT_OPENAI_MAX_INPUT_BYTES must be a positive integer'
+    (( $(wc -c < "$input_file") <= max_input_bytes )) || die "backend input exceeds ${max_input_bytes} bytes"
+
+    jq -n \
+        --arg model "$model" \
+        --rawfile instructions "$input_file" \
+        --slurpfile schema "$schema_file" \
+        '{
+            model: $model,
+            messages: [{
+                role: "user",
+                content: ($instructions + "\n\n<output-schema>\n" + ($schema[0] | tojson) + "\n</output-schema>")
+            }],
+            stream: false
+        }' > "$request_file"
+
+    curl_bin=$(resolve_binary "${MAINT_CURL_BIN:-curl}")
+    curl_command=(
+        "$curl_bin"
+        --fail-with-body
+        --silent
+        --show-error
+        --max-time "$timeout_seconds"
+        --header 'Content-Type: application/json'
+    )
+    if [[ -n ${MAINT_OPENAI_API_KEY:-} ]]; then
+        printf 'Authorization: Bearer %s\n' "$MAINT_OPENAI_API_KEY" > "$auth_file"
+        curl_command+=(--header "@$auth_file")
+    fi
+    curl_command+=(--data-binary "@$request_file" "${base_url%/}/chat/completions")
+
+    if "${curl_command[@]}" > "$backend_stdout" 2> "$backend_stderr"; then
+        :
+    else
+        local rc=$?
+        die "$backend backend failed (exit $rc)"
+    fi
+
+    jq -er '.choices[0].message.content | if type == "string" then . else tojson end' \
+        "$backend_stdout" > "$candidate_file" || die "$backend backend did not return message content"
+    jq -e . "$candidate_file" >/dev/null || die "$backend backend message content is not JSON"
+}
+
 case "$backend" in
     claude)
         claude_bin=$(resolve_binary "${MAINT_CLAUDE_BIN:-claude}")
@@ -335,6 +388,12 @@ case "$backend" in
         fi
         jq -e . "$backend_stdout" >/dev/null || die 'codex backend did not return JSON'
         cp "$backend_stdout" "$candidate_file"
+        ;;
+    hermes)
+        run_openai_compatible 'http://127.0.0.1:8642/v1' 'hermes-agent'
+        ;;
+    local)
+        run_openai_compatible 'http://127.0.0.1:11434/v1' ''
         ;;
 esac
 

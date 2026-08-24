@@ -11,6 +11,7 @@ prompt=$tmp_dir/prompt.md
 schema=$tmp_dir/schema.json
 fake_claude=$tmp_dir/claude
 fake_codex=$tmp_dir/codex
+fake_curl=$tmp_dir/curl
 
 cat > "$prompt" <<'EOF'
 Return the evidence verdict as the requested JSON object.
@@ -58,7 +59,27 @@ input=$(cat)
 [[ "$input" == *"<evidence-bundle>"* ]]
 printf '%s\n' '{"status":"ok","summary":"test"}'
 EOF
-chmod +x "$fake_claude" "$fake_codex"
+cat > "$fake_curl" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+args=$*
+[[ "$args" == *"/v1/chat/completions"* ]]
+request_path=
+for argument in "$@"; do
+    if [[ "$argument" == @*request.json ]]; then
+        request_path=${argument#@}
+    fi
+done
+[[ -r "$request_path" ]]
+jq -e '.messages[0].content | contains("<evidence-bundle>") and contains("<output-schema>")' "$request_path" >/dev/null
+if [[ ${MAINT_FAKE_RESULT:-valid} == invalid ]]; then
+    content='not json'
+else
+    content='{"status":"ok","summary":"test"}'
+fi
+jq -n --arg content "$content" '{choices:[{message:{content:$content}}]}'
+EOF
+chmod +x "$fake_claude" "$fake_codex" "$fake_curl"
 
 claude_output=$(printf '%s\n' 'synthetic evidence' | \
     MAINT_BACKEND=claude MAINT_CLAUDE_BIN="$fake_claude" MAINT_TIMEOUT_SECONDS=10 \
@@ -71,6 +92,18 @@ codex_output=$(printf '%s\n' 'synthetic evidence' | \
     "$script" "$prompt" "$schema")
 [[ $(jq -r '.status' <<<"$codex_output") == ok ]]
 [[ $(jq -r '.summary' <<<"$codex_output") == test ]]
+
+hermes_output=$(printf '%s\n' 'synthetic evidence' | \
+    MAINT_BACKEND=hermes MAINT_CURL_BIN="$fake_curl" MAINT_TIMEOUT_SECONDS=10 \
+    "$script" "$prompt" "$schema")
+[[ $(jq -r '.status' <<<"$hermes_output") == ok ]]
+[[ $(jq -r '.summary' <<<"$hermes_output") == test ]]
+
+local_output=$(printf '%s\n' 'synthetic evidence' | \
+    MAINT_BACKEND=local MAINT_OPENAI_MODEL=test-local MAINT_CURL_BIN="$fake_curl" \
+    MAINT_TIMEOUT_SECONDS=10 "$script" "$prompt" "$schema")
+[[ $(jq -r '.status' <<<"$local_output") == ok ]]
+[[ $(jq -r '.summary' <<<"$local_output") == test ]]
 
 if printf '%s\n' 'synthetic evidence' | \
     MAINT_BACKEND=claude MAINT_CLAUDE_BIN="$fake_claude" MAINT_FAKE_RESULT=invalid \
@@ -87,8 +120,9 @@ if printf '%s\n' 'synthetic evidence' | \
 fi
 
 if printf '%s\n' 'synthetic evidence' | \
-    MAINT_BACKEND=hermes MAINT_TIMEOUT_SECONDS=10 "$script" "$prompt" "$schema" >/dev/null 2>&1; then
-    printf 'reserved backend unexpectedly succeeded\n' >&2
+    MAINT_BACKEND=hermes MAINT_CURL_BIN="$fake_curl" MAINT_FAKE_RESULT=invalid \
+    MAINT_TIMEOUT_SECONDS=10 "$script" "$prompt" "$schema" >/dev/null 2>&1; then
+    printf 'invalid OpenAI-compatible output unexpectedly succeeded\n' >&2
     exit 1
 fi
 

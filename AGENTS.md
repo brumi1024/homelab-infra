@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Ansible repository for a Komodo-based homelab, published as `homelab-infra`.
 Public and forked: every commit is published for good.
@@ -16,7 +16,12 @@ Forks have only layer 2: no `agentic-notes` checkout, so anything an agent needs
 Discipline for the `agentic-notes` checkout: pull it (`--ff-only`) before trusting it, commit and push in the same session as any live change or verification, on conflict re-verify against the live system rather than guessing which side is right, and never commit machine-generated bulk output (raw check output, large diffs, images stay box-local; only distilled reports and runbooks are committed).
 
 Stack definitions live in the sibling repositories named in `README.md` and `komodo_resource_syncs_repo`.
-On the operator machine and `agent-infra` they are checked out next to this one; the workspace `CLAUDE.md` one level up maps them.
+On the operator machine and `agent-infra` they are checked out next to this one; the workspace `AGENTS.md` one level up maps them.
+
+## Reusable procedures
+
+- Use `$komodo-stack-lifecycle` for adding, removing, or auditing a stack across the four Komodo repositories.
+- Use `$renovate-pr-triage` for read-only risk classification of Renovate dependency pull requests.
 
 ## Shape versus state
 

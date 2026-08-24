@@ -33,8 +33,17 @@ This repository runs from two kinds of machine:
 
 Both environments read the same 1Password vault and the same inventory shape; only how `op` authenticates differs.
 
+## Maintenance interpretation backends
+
+`scripts/maint/interpret.sh` keeps scheduled evidence interpretation behind one backend seam selected by `MAINT_BACKEND`.
+`claude` and `codex` use their CLIs with read-only tools or sandboxing.
+`hermes` calls an OpenAI-compatible Hermes Agent API at `http://127.0.0.1:8642/v1` by default, while `local` calls a configurable OpenAI-compatible endpoint and requires `MAINT_OPENAI_MODEL`.
+Override either endpoint with `MAINT_OPENAI_BASE_URL` and provide `MAINT_OPENAI_API_KEY` only when the endpoint requires it.
+All backend output is validated locally against the supplied JSON Schema, and every run has a timeout and input-size bound.
+
 ## Further reading
 
 - `docs/architecture.md`: how the pieces fit together, independent of any one deployment.
 - `docs/1password.md`: the 1Password items and fields this repository expects.
 - `AGENTS.md`: the working agreement for coding agents operating this repository.
+- `.agents/skills/komodo-stack-lifecycle/`: the reusable add/remove stack procedure and its runbooks.
