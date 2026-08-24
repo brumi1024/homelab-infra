@@ -311,24 +311,33 @@
         ~ ' homelab-break-glass'
       }}
   no_log: true
+  throttle: 1
   when: homelab_ssh_break_glass_enabled | bool
   tags: [ssh_access, break_glass]
 
-- name: Read root authorized keys for break-glass verification
+- name: Inspect root authorized keys
+  ansible.builtin.stat:
+    path: /root/.ssh/authorized_keys
+  register: host_baseline_verify_authorized_keys_stat
+  when: homelab_tailscale_ssh_managed | bool
+  tags: [ssh_access, break_glass]
+
+- name: Read root authorized keys
   ansible.builtin.slurp:
     path: /root/.ssh/authorized_keys
   register: host_baseline_verify_authorized_keys
-  failed_when: false
   no_log: true
-  when: homelab_ssh_break_glass_enabled | bool
+  when:
+    - homelab_tailscale_ssh_managed | bool
+    - host_baseline_verify_authorized_keys_stat.stat.exists
   tags: [ssh_access, break_glass]
 
-- name: Record a missing or duplicate break-glass key
+- name: Record an inexact break-glass authorized-keys file
   ansible.builtin.set_fact:
     host_baseline_verify_failures: >-
       {{
         host_baseline_verify_failures
-        + [inventory_hostname ~ ' does not have exactly one configured break-glass key.']
+        + [inventory_hostname ~ ' does not have the exclusive configured break-glass key.']
       }}
   vars:
     host_baseline_verify_authorized_key_lines: >-
@@ -342,11 +351,22 @@
   when:
     - homelab_ssh_break_glass_enabled | bool
     - >-
-      host_baseline_verify_authorized_key_lines
-      | select('equalto', host_baseline_verify_break_glass_line)
-      | list
-      | length != 1
+      not host_baseline_verify_authorized_keys_stat.stat.exists
+      or host_baseline_verify_authorized_key_lines != [host_baseline_verify_break_glass_line]
   no_log: true
+  tags: [ssh_access, break_glass]
+
+- name: Record root authorized keys on a Tailscale-only host
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' still has a root authorized-keys file.']
+      }}
+  when:
+    - homelab_tailscale_ssh_managed | bool
+    - not homelab_ssh_break_glass_enabled | bool
+    - host_baseline_verify_authorized_keys_stat.stat.exists
   tags: [ssh_access, break_glass]
 
 - name: Read Tailscale status on the control host

@@ -21,6 +21,7 @@
         ).split()[:2] | join(' ')
       }}
   no_log: true
+  throttle: 1
   when: homelab_ssh_break_glass_enabled | bool
   tags: [ssh_access, break_glass]
 
@@ -34,15 +35,22 @@
   when: homelab_ssh_break_glass_enabled | bool
   tags: [ssh_access, break_glass]
 
-- name: Install the marker-owned break-glass public key
-  ansible.builtin.lineinfile:
-    path: /root/.ssh/authorized_keys
-    regexp: '^.*\s+homelab-break-glass$'
-    line: "{{ host_baseline_break_glass_public_key }} homelab-break-glass"
-    create: true
+- name: Install the exclusive break-glass public key
+  ansible.builtin.copy:
+    dest: /root/.ssh/authorized_keys
+    content: "{{ host_baseline_break_glass_public_key }} homelab-break-glass\n"
     owner: root
     group: root
     mode: "0600"
   no_log: true
   when: homelab_ssh_break_glass_enabled | bool
+  tags: [ssh_access, break_glass]
+
+- name: Remove root authorized keys from Tailscale-only hosts
+  ansible.builtin.file:
+    path: /root/.ssh/authorized_keys
+    state: absent
+  when:
+    - homelab_tailscale_ssh_managed | bool
+    - not homelab_ssh_break_glass_enabled | bool
   tags: [ssh_access, break_glass]
