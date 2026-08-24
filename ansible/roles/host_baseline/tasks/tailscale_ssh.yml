@@ -54,6 +54,7 @@
     argv:
       - tailscale
       - set
+      - "--accept-risk=lose-ssh"
       - "--ssh={{ homelab_tailscale_ssh_enabled | bool | ternary('true', 'false') }}"
   changed_when: true
   when:
