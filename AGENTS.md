@@ -35,6 +35,7 @@ Hosts are addressed by MagicDNS short name. Tailscale addresses, the tailnet dom
 - Comments describe current state and rationale in one line; history belongs to git. Match the density of the file; default to no comment.
 - Markdown: one sentence per line, plain dashes, no em dash.
 - A one-off fix applied by SSH stays a one-off fix: record it in `Infra/` with the date and the host.
+  Record each ad hoc fix in `Infra/one-offs.md` so a second occurrence becomes a grep.
   Promote it into `host_baseline` (or the relevant role) only on its second occurrence, so the baseline grows from recurring gotchas, not single incidents.
 
 ## Gotchas no config confesses
