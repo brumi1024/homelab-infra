@@ -73,5 +73,5 @@ Four playbooks compose them; each is idempotent and safe to re-run.
   On a tailnet an address is only reachable while `tailscaled` runs, which is exactly when MagicDNS also works, so a literal address survives no outage that the name does not.
 - **Outbound Periphery.** Hosts behind NAT or on other sites need no exposed port; only Core needs a public endpoint.
 - **Core bound to localhost.** TLS, authentication, and rate limiting are the reverse proxy's job.
-- **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make periphery-upgrade` keeps the fleet aligned.
+- **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make upgrade` keeps the fleet aligned.
 - **Compose project name.** Stacks are named by `komodo_compose_project_name`, so manual `docker compose` calls need `-p` and `--env-file compose.env` to find them.
