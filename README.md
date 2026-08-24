@@ -17,6 +17,8 @@ make bootstrap APPLY=1                # apply it
 
 `make help` lists every target; every mutating one defaults to `--check --diff` and needs `APPLY=1` to touch a live host.
 
+The `bin/komodo` wrapper provides generic read, write, and execute calls plus common stack, server, sync, deployment, and log commands, fetching API credentials from the `Komodo` 1Password item at call time and allowing `KOMODO_URL` to override its `komodo_host` field.
+
 ## Two execution environments
 
 This repository runs from two kinds of machine:

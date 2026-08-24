@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly script_name=${0##*/}
+readonly op_vault=${KOMODO_OP_VAULT:-${HOMELAB_OP_VAULT:-Homelab Ansible}}
+readonly op_item_uri="op://${op_vault}/Komodo"
+
+die() {
+  printf '%s: %s\n' "$script_name" "$*" >&2
+  exit 2
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bin/komodo read TYPE JSON_PARAMS
+  bin/komodo write TYPE JSON_PARAMS
+  bin/komodo execute TYPE JSON_PARAMS
+  bin/komodo stacks
+  bin/komodo servers
+  bin/komodo syncs
+  bin/komodo deploy STACK
+  bin/komodo run-sync NAME
+  bin/komodo logs STACK
+
+The generic commands POST {"type": TYPE, "params": JSON_PARAMS} to the
+matching Komodo API endpoint. JSON_PARAMS must be a JSON object.
+
+Set KOMODO_URL to override the komodo_host field for a direct endpoint.
+Set KOMODO_OP_VAULT when the Komodo item lives outside the default vault.
+EOF
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+op_read() {
+  require_command op
+  op read "${op_item_uri}/$1"
+}
+
+resolve_base_url() {
+  local base_url
+
+  if [[ -n ${KOMODO_URL:-} ]]; then
+    base_url=$KOMODO_URL
+  else
+    base_url=$(op_read komodo_host) || die "could not read komodo_host from ${op_item_uri}"
+  fi
+
+  [[ -n $base_url ]] || die "Komodo base URL is empty"
+  case $base_url in
+    http://*|https://*) ;;
+    *) base_url="https://${base_url}" ;;
+  esac
+  base_url=${base_url%/}
+  printf '%s' "$base_url"
+}
+
+escape_curl_config() {
+  local value=$1
+
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  printf '%s' "$value"
+}
+
+write_curl_config() {
+  local url=$1
+  local api_key=$2
+  local api_secret=$3
+  local escaped_url escaped_key escaped_secret
+
+  escaped_url=$(escape_curl_config "$url")
+  escaped_key=$(escape_curl_config "$api_key")
+  escaped_secret=$(escape_curl_config "$api_secret")
+
+  printf 'url = "%s"\n' "$escaped_url"
+  printf 'request = "POST"\n'
+  printf 'header = "Content-Type: application/json"\n'
+  printf 'header = "X-Api-Key: %s"\n' "$escaped_key"
+  printf 'header = "X-Api-Secret: %s"\n' "$escaped_secret"
+  printf 'connect-timeout = 10\n'
+  printf 'max-time = 120\n'
+}
+
+validate_params() {
+  local params=$1
+
+  require_command python3
+  python3 -c \
+    'import json, sys; value = json.loads(sys.argv[1]); raise SystemExit(0 if isinstance(value, dict) else 1)' \
+    "$params" >/dev/null 2>&1 \
+    || die "JSON params must be a valid JSON object"
+}
+
+json_string() {
+  require_command python3
+  python3 -c 'import json, sys; sys.stdout.write(json.dumps(sys.argv[1]))' "$1"
+}
+
+request_body() {
+  local type=$1
+  local params=$2
+  local encoded_type
+
+  [[ $type =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || die "invalid API type: $type"
+  validate_params "$params"
+  encoded_type=$(json_string "$type")
+  printf '{"type":%s,"params":%s}\n' "$encoded_type" "$params"
+}
+
+api_request() {
+  local endpoint=$1
+  local type=$2
+  local params=$3
+  local base_url api_key api_secret body
+
+  base_url=$(resolve_base_url)
+  api_key=$(op_read komodo_api_key) || die "could not read komodo_api_key from ${op_item_uri}"
+  api_secret=$(op_read komodo_api_secret) || die "could not read komodo_api_secret from ${op_item_uri}"
+  [[ -n $api_key ]] || die "komodo_api_key is empty"
+  [[ -n $api_secret ]] || die "komodo_api_secret is empty"
+  body=$(request_body "$type" "$params")
+
+  require_command curl
+  curl --fail-with-body --silent --show-error \
+    --config <(write_curl_config "${base_url}/${endpoint}" "$api_key" "$api_secret") \
+    --data-raw "$body"
+}
+
+require_arg_count() {
+  local expected=$1
+  local label=$2
+
+  [[ $# -eq $((expected + 2)) ]] || die "$label expects ${expected} argument(s)"
+}
+
+main() {
+  local command=${1:-}
+  shift || true
+
+  case $command in
+    -h|--help|help)
+      [[ $# -eq 0 ]] || die "help takes no arguments"
+      usage
+      ;;
+    read|write|execute)
+      require_arg_count 2 "$command" "$@"
+      api_request "$command" "$1" "$2"
+      ;;
+    stacks)
+      require_arg_count 0 stacks "$@"
+      api_request read ListStacks '{}'
+      ;;
+    servers)
+      require_arg_count 0 servers "$@"
+      api_request read ListServers '{}'
+      ;;
+    syncs)
+      require_arg_count 0 syncs "$@"
+      api_request read ListResourceSyncs '{}'
+      ;;
+    deploy)
+      require_arg_count 1 deploy "$@"
+      api_request execute DeployStack "{\"stack\":$(json_string "$1"),\"services\":[]}"
+      ;;
+    run-sync)
+      require_arg_count 1 run-sync "$@"
+      api_request execute RunSync "{\"sync\":$(json_string "$1")}"
+      ;;
+    logs)
+      require_arg_count 1 logs "$@"
+      api_request read GetStackLog "{\"stack\":$(json_string "$1"),\"services\":[]}"
+      ;;
+    '')
+      usage >&2
+      exit 2
+      ;;
+    *)
+      die "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"
