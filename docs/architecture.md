@@ -73,7 +73,7 @@ Five playbooks compose them; each is idempotent and safe to re-run.
 
 - **Names over addresses.** `ansible_host` is a resolvable name.
   On a tailnet an address is only reachable while `tailscaled` runs, which is exactly when MagicDNS also works, so a literal address survives no outage that the name does not.
-- **Two SSH lanes.** Tailscale SSH is the explicitly enabled normal path, while selected tier-0 hosts keep a marker-owned break-glass public key whose private half remains in 1Password.
+- **Two SSH lanes.** Tailscale SSH is the explicitly enabled normal path; its hosts have no root authorized keys unless selected for tier-0 recovery, in which case the exclusive break-glass public key has its private half in 1Password.
   The `ssh_access` group scopes those tasks without applying the rest of the host baseline to hypervisors or dedicated agent hosts.
 - **Outbound Periphery.** Hosts behind NAT or on other sites need no exposed port; only Core needs a public endpoint.
 - **Core bound to localhost.** TLS, authentication, and rate limiting are the reverse proxy's job.
