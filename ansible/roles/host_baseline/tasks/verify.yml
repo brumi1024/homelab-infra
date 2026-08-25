@@ -100,8 +100,14 @@
     - host_baseline_verify_input_firewall.status.ActiveState != 'active'
   tags: security
 
+# A dynamic include passes its own tags to the included tasks only through
+# apply; without it a tag-filtered run executes the include, skips everything
+# inside it, and the checks below fail on an undefined source address.
 - name: Resolve the Docker proxy source address
-  ansible.builtin.include_tasks: discover_core_tailnet_ip.yml
+  ansible.builtin.include_tasks:
+    file: discover_core_tailnet_ip.yml
+    apply:
+      tags: security
   when:
     - inventory_hostname in groups['komodo']
     - homelab_docker_proxy_firewall_enabled | bool
