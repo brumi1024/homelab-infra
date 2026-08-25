@@ -33,6 +33,13 @@ This repository runs from two kinds of machine:
 
 Both environments read the same 1Password vault and the same inventory shape; only how `op` authenticates differs.
 
+## Scheduled maintenance runs
+
+`scripts/maint/run.sh` gathers the read-only checks, diffs them against the previous run, and calls a model only when the diff is non-empty or a check failed.
+Raw evidence stays on the running machine under `~/.local/state/maint/`; the distilled report and the one-line-per-run index are written to `Reports/` in the notes checkout named by `MAINT_VAULT_DIR`.
+When that checkout is a git repository the run pulls it `--ff-only` before writing and commits only the `Reports/` pathspec, so an operator's unrelated edits are never swept into a machine commit.
+A pull or push failure is logged and the run continues; set `MAINT_SKIP_VAULT_PUBLISH=1` to keep the reports local.
+
 ## Maintenance interpretation backends
 
 `scripts/maint/interpret.sh` keeps scheduled evidence interpretation behind one backend seam selected by `MAINT_BACKEND`.
@@ -47,3 +54,4 @@ All backend output is validated locally against the supplied JSON Schema, and ev
 - `docs/1password.md`: the 1Password items and fields this repository expects.
 - `AGENTS.md`: the working agreement for coding agents operating this repository.
 - `.agents/skills/komodo-stack-lifecycle/`: the reusable add/remove stack procedure and its runbooks.
+- `.agents/skills/homelab-health-check/` and `.agents/skills/homelab-one-off/`: the read-only estate check and the guarded ad hoc fix, written for one-line invocation from a phone.
