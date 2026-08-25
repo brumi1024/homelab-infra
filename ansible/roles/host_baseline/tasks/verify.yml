@@ -518,6 +518,48 @@
 
 # --- komodo -------------------------------------------------------------
 
+- name: Check Komodo environment file permissions
+  ansible.builtin.stat:
+    path: "{{ komodo_install_dir }}/compose.env"
+  register: host_baseline_verify_core_environment
+  when: inventory_hostname in groups['core']
+  tags: [komodo, security]
+
+- name: Record insecure Komodo environment file permissions
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' Komodo compose.env must exist with mode 0600.']
+      }}
+  when:
+    - inventory_hostname in groups['core']
+    - >-
+      not host_baseline_verify_core_environment.stat.exists
+      or host_baseline_verify_core_environment.stat.mode != '0600'
+  tags: [komodo, security]
+
+- name: Find legacy Komodo environment backups
+  ansible.builtin.find:
+    paths: "{{ komodo_install_dir }}"
+    patterns: "compose.env.*~"
+    file_type: file
+  register: host_baseline_verify_core_environment_backups
+  when: inventory_hostname in groups['core']
+  tags: [komodo, security]
+
+- name: Record legacy Komodo environment backups
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' retains legacy compose.env backups.']
+      }}
+  when:
+    - inventory_hostname in groups['core']
+    - host_baseline_verify_core_environment_backups.matched > 0
+  tags: [komodo, security]
+
 - name: Require the local Core endpoint
   ansible.builtin.uri:
     url: "{{ komodo_core_local_health_url }}"
@@ -572,6 +614,21 @@
   when: inventory_hostname in groups['periphery']
   tags: komodo
 
+- name: Resolve the configured Periphery Core port
+  ansible.builtin.set_fact:
+    host_baseline_verify_periphery_core_port: >-
+      {{
+        (komodo_core_address | ansible.builtin.urlsplit('port'))
+        | default(
+            443
+            if (komodo_core_address | ansible.builtin.urlsplit('scheme')) == 'wss'
+            else 80,
+            true
+          )
+      }}
+  when: inventory_hostname in groups['periphery']
+  tags: komodo
+
 - name: Record Periphery missing its WebSocket connection to Core
   ansible.builtin.set_fact:
     host_baseline_verify_failures: "{{ host_baseline_verify_failures + [inventory_hostname ~ ' Periphery has no live WebSocket connection to Komodo Core.'] }}"
@@ -580,7 +637,7 @@
     - >-
       host_baseline_verify_periphery_connections.stdout_lines
       | select('search', 'periphery')
-      | select('search', ':443')
+      | select('search', ':' ~ host_baseline_verify_periphery_core_port ~ '\\s')
       | list
       | length == 0
   tags: komodo
