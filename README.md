@@ -54,3 +54,4 @@ All backend output is validated locally against the supplied JSON Schema, and ev
 - `docs/1password.md`: the 1Password items and fields this repository expects.
 - `AGENTS.md`: the working agreement for coding agents operating this repository.
 - `.agents/skills/komodo-stack-lifecycle/`: the reusable add/remove stack procedure and its runbooks.
+- `.agents/skills/homelab-health-check/` and `.agents/skills/homelab-one-off/`: the read-only estate check and the guarded ad hoc fix, written for one-line invocation from a phone.

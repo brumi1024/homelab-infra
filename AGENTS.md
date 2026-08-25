@@ -19,6 +19,8 @@ Stack definitions live in the sibling repositories named by `README.md` and the 
 
 - `$komodo-stack-lifecycle` for adding, removing, or auditing a stack across the four Komodo repositories.
 - `$renovate-pr-triage` for read-only risk classification of Renovate dependency pull requests.
+- `$homelab-health-check` for a read-only answer to whether the estate still matches the notes.
+- `$homelab-one-off` for a single ad hoc fix to a live host, diff first, ledger entry included.
 
 ## Shape versus state
 
