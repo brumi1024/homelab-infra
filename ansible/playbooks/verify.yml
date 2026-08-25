@@ -1,6 +1,10 @@
 ---
+# A Tailscale-only host keeps no root authorized_keys, and Tailscale SSH does not
+# intercept a node connecting to itself, so the machine running this play cannot
+# reach itself over SSH. It is excluded here and verified from a peer instead;
+# the final play names it so the gap is never silent.
 - name: Verify the managed host baselines
-  hosts: komodo:proxmox:ssh_access
+  hosts: "komodo:proxmox:ssh_access:!{{ lookup('ansible.builtin.pipe', 'hostname -s') }}"
   become: true
   gather_facts: true
   tasks:
@@ -18,4 +22,20 @@
       ansible.builtin.include_role:
         name: host_baseline
         tasks_from: verify
+      tags: always
+
+    - name: Name the managed host this run could not verify
+      vars:
+        controller: "{{ lookup('ansible.builtin.pipe', 'hostname -s') }}"
+        managed: >-
+          {{
+            (groups['komodo'] | default([]))
+            + (groups['proxmox'] | default([]))
+            + (groups['ssh_access'] | default([]))
+          }}
+      ansible.builtin.debug:
+        msg: >-
+          {{ controller }} runs this play and cannot reach itself over SSH,
+          so it was skipped. Run make verify from another machine to cover it.
+      when: controller in managed
       tags: always

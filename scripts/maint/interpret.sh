@@ -332,11 +332,20 @@ run_openai_compatible() {
 case "$backend" in
     claude)
         claude_bin=$(resolve_binary "${MAINT_CLAUDE_BIN:-claude}")
-        schema_json=$(<"$schema_file")
+        # The CLI resolves no remote meta-schema, so $schema is dropped on the
+        # way in while the file on disk stays self-describing for editors.
+        # shellcheck disable=SC2016  # $schema is a JSON key, not a shell variable
+        schema_json=$(python3 -c 'import json,sys
+schema = json.load(open(sys.argv[1]))
+schema.pop("$schema", None)
+print(json.dumps(schema))' "$schema_file") || die 'unable to read the JSON Schema'
+        # No --bare: it reads Anthropic auth strictly from ANTHROPIC_API_KEY or
+        # apiKeyHelper and never from OAuth, while the agent hosts run on a
+        # claude.ai subscription login because Remote Control requires one.
+        # Read-only comes from --allowedTools and --permission-mode, not --bare.
         claude_command=(
             "$claude_bin"
             -p
-            --bare
             --model "${MAINT_CLAUDE_MODEL:-sonnet}"
             --effort "${MAINT_CLAUDE_EFFORT:-low}"
             --permission-mode dontAsk
