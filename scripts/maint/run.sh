@@ -51,7 +51,40 @@ if [[ -z "$previous" && ! -s "$failed_file" ]]; then
     compare_status=0
 fi
 
-reports_dir=$vault_dir/Infra/reports
+reports_dir=$vault_dir/Reports
+
+warn() {
+    printf 'run: %s\n' "$*" >&2
+}
+
+vault_git() {
+    git -C "$vault_dir" "$@"
+}
+
+vault_is_repo() {
+    [[ ${MAINT_SKIP_VAULT_PUBLISH:-0} != 1 ]] &&
+        command -v git >/dev/null 2>&1 &&
+        vault_git rev-parse --git-dir >/dev/null 2>&1
+}
+
+# Pull before writing so the appended index lands on top of the newest remote state.
+if vault_is_repo; then
+    vault_git pull --ff-only >/dev/null 2>&1 ||
+        warn 'vault pull --ff-only failed; reports may be written against stale notes'
+fi
+
+publish_reports() {
+    vault_is_repo || return 0
+    vault_git add -- Reports >/dev/null 2>&1 || { warn 'vault add failed'; return 0; }
+    if vault_git diff --cached --quiet -- Reports; then
+        return 0
+    fi
+    vault_git commit -m "Record maintenance run $run_date" -- Reports >/dev/null 2>&1 ||
+        { warn 'vault commit failed'; return 0; }
+    vault_git push >/dev/null 2>&1 ||
+        warn 'vault push failed; the commit is local, reconcile the vault by hand'
+}
+
 mkdir -p "$reports_dir"
 
 status=ok
@@ -163,6 +196,8 @@ if [[ "$status" != ok ]]; then
         fi
     fi
 fi
+
+publish_reports
 
 printf 'status=%s\n' "$status"
 printf 'run=%s\n' "$current"

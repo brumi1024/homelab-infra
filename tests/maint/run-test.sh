@@ -49,6 +49,20 @@ EOF
 cat > "$fake_bin/git" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+if [[ "$1" == -C ]]; then
+    printf '%s\n' "$*" >> "$MAINT_TEST_GIT_LOG"
+    shift 2
+    case "$1 ${2:-}" in
+        "rev-parse --git-dir") printf '.git\n' ;;
+        "pull --ff-only") ;;
+        "add --") ;;
+        "diff --cached") exit 1 ;;
+        "commit -m") ;;
+        "push ") ;;
+        *) printf 'unexpected vault git command: %s\n' "$*" >&2; exit 1 ;;
+    esac
+    exit 0
+fi
 case "$1" in
     fetch) printf 'fetch preview\n' ;;
     status) printf '## main...origin/main\n' ;;
@@ -85,6 +99,7 @@ EOF
 chmod +x "$fake_bin"/* "$tmp_dir/interpret"
 : > "$calls/interpreter"
 : > "$calls/curl"
+: > "$calls/git"
 
 run_maint() {
     PATH="$fake_bin:$PATH" \
@@ -102,6 +117,7 @@ run_maint() {
         MAINT_TEST_INTERPRET_LOG="$calls/interpreter" \
         MAINT_NTFY_URL=https://ntfy.invalid/homelab \
         MAINT_TEST_CURL_LOG="$calls/curl" \
+        MAINT_TEST_GIT_LOG="$calls/git" \
         "$repo_root/scripts/maint/run.sh"
 }
 
@@ -113,7 +129,10 @@ second=$(run_maint)
 [[ "$second" == *'model_called=0'* ]]
 [[ ! -s "$calls/interpreter" ]]
 [[ ! -s "$calls/curl" ]]
-[[ $(wc -l < "$vault_dir/Infra/reports/index.md" | tr -d ' ') == 2 ]]
+[[ $(wc -l < "$vault_dir/Reports/index.md" | tr -d ' ') == 2 ]]
+[[ $(grep -c ' pull --ff-only' "$calls/git" | tr -d ' ') == 2 ]]
+[[ $(grep -c ' push$' "$calls/git" | tr -d ' ') == 2 ]]
+grep -q -- 'commit -m Record maintenance run 2026-08-24 -- Reports' "$calls/git"
 
 printf 'changed\n' > "$mode_file"
 third=$(run_maint)
@@ -121,8 +140,8 @@ third=$(run_maint)
 [[ "$third" == *'model_called=1'* ]]
 [[ $(wc -l < "$calls/interpreter" | tr -d ' ') == 1 ]]
 [[ $(wc -l < "$calls/curl" | tr -d ' ') == 1 ]]
-[[ -s "$vault_dir/Infra/reports/2026-08-24-maint.md" ]]
-grep -q -- '- test: fixture changed (fixture)' "$vault_dir/Infra/reports/2026-08-24-maint.md"
+[[ -s "$vault_dir/Reports/2026-08-24-maint.md" ]]
+grep -q -- '- test: fixture changed (fixture)' "$vault_dir/Reports/2026-08-24-maint.md"
 
 printf 'failed\n' > "$mode_file"
 if run_maint > "$tmp_dir/fourth.out"; then
