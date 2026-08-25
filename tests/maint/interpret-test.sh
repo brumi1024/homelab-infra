@@ -31,8 +31,9 @@ cat > "$fake_claude" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 args=$*
-[[ "$args" == *"--bare"* ]]
+[[ "$args" != *"--bare"* ]]
 [[ "$args" == *"--allowedTools Read,Grep,Glob"* ]]
+[[ "$args" == *"--permission-mode dontAsk"* ]]
 [[ "$args" == *"--output-format json"* ]]
 [[ "$args" == *"--json-schema"* ]]
 [[ "$args" == *"--max-budget-usd"* ]]

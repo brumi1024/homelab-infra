@@ -333,10 +333,13 @@ case "$backend" in
     claude)
         claude_bin=$(resolve_binary "${MAINT_CLAUDE_BIN:-claude}")
         schema_json=$(<"$schema_file")
+        # No --bare: it reads Anthropic auth strictly from ANTHROPIC_API_KEY or
+        # apiKeyHelper and never from OAuth, while the agent hosts run on a
+        # claude.ai subscription login because Remote Control requires one.
+        # Read-only comes from --allowedTools and --permission-mode, not --bare.
         claude_command=(
             "$claude_bin"
             -p
-            --bare
             --model "${MAINT_CLAUDE_MODEL:-sonnet}"
             --effort "${MAINT_CLAUDE_EFFORT:-low}"
             --permission-mode dontAsk
