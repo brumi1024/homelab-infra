@@ -1,0 +1,188 @@
+---
+- name: Validate the TCP BBR mode
+  ansible.builtin.assert:
+    that:
+      - homelab_reliability_tcp_bbr_mode in ['disabled', 'module', 'namespace', 'module_and_namespace']
+    fail_msg: >-
+      homelab_reliability_tcp_bbr_mode must be disabled, module, namespace,
+      or module_and_namespace.
+  tags: [reliability, bbr]
+
+- name: Validate Proxmox LXC BBR targets
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | string | length > 0
+      - item.vmid is defined
+      - item.vmid | int > 0
+    fail_msg: Each BBR LXC target requires a non-empty name and positive VMID.
+  loop: "{{ homelab_reliability_tcp_bbr_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name | default(item.vmid | default('invalid')) }}"
+  tags: [reliability, bbr]
+
+- name: Load and persist the TCP BBR kernel module
+  community.general.modprobe:
+    name: tcp_bbr
+    state: present
+    persistent: present
+  when: >-
+    homelab_reliability_tcp_bbr_mode in ['module', 'module_and_namespace']
+    or homelab_reliability_tcp_bbr_lxc_targets | length > 0
+  tags: [reliability, bbr]
+
+- name: Persist BBR in the current network namespace
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.d/99-tcp-bbr.conf
+    regexp: '^\s*net\.ipv4\.tcp_congestion_control\s*='
+    line: 'net.ipv4.tcp_congestion_control = bbr'
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  when: homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+  tags: [reliability, bbr]
+
+- name: Read congestion control in the current network namespace
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - -n
+      - net.ipv4.tcp_congestion_control
+  register: host_baseline_bbr_current_namespace
+  changed_when: false
+  check_mode: false
+  when: homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+  tags: [reliability, bbr]
+
+- name: Report a pending current-namespace BBR activation
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} currently uses
+      {{ host_baseline_bbr_current_namespace.stdout | trim }} and would switch
+      its network namespace to bbr.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+    - host_baseline_bbr_current_namespace.stdout | trim != 'bbr'
+  tags: [reliability, bbr]
+
+- name: Activate BBR in the current network namespace
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - -w
+      - net.ipv4.tcp_congestion_control=bbr
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+    - host_baseline_bbr_current_namespace.stdout | trim != 'bbr'
+  tags: [reliability, bbr]
+
+- name: Resolve running Proxmox LXC init processes
+  ansible.builtin.command:
+    argv:
+      - lxc-info
+      - -n
+      - "{{ item.vmid }}"
+      - -pH
+  loop: "{{ homelab_reliability_tcp_bbr_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_baseline_bbr_lxc_pids
+  changed_when: false
+  check_mode: false
+  tags: [reliability, bbr]
+
+- name: Require a running process for every BBR LXC target
+  ansible.builtin.assert:
+    that:
+      - item.stdout | trim is match('^[0-9]+$')
+    fail_msg: >-
+      BBR target {{ item.item.name }} (LXC {{ item.item.vmid }}) is not running
+      on {{ inventory_hostname }}.
+  loop: "{{ host_baseline_bbr_lxc_pids.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: [reliability, bbr]
+
+- name: Ensure each BBR LXC has a sysctl directory
+  ansible.builtin.file:
+    path: "/proc/{{ item.stdout | trim }}/root/etc/sysctl.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ host_baseline_bbr_lxc_pids.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: [reliability, bbr]
+
+- name: Persist BBR in selected LXC network namespaces
+  ansible.builtin.lineinfile:
+    path: "/proc/{{ item.stdout | trim }}/root/etc/sysctl.d/99-tcp-bbr.conf"
+    regexp: '^\s*net\.ipv4\.tcp_congestion_control\s*='
+    line: 'net.ipv4.tcp_congestion_control = bbr'
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ host_baseline_bbr_lxc_pids.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  tags: [reliability, bbr]
+
+- name: Read congestion control in selected LXC network namespaces
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ bbr_lxc.item.vmid }}"
+      - --
+      - sysctl
+      - -n
+      - net.ipv4.tcp_congestion_control
+  loop: "{{ host_baseline_bbr_lxc_pids.results }}"
+  loop_control:
+    loop_var: bbr_lxc
+    label: "{{ bbr_lxc.item.name }}"
+  register: host_baseline_bbr_lxc_namespaces
+  changed_when: false
+  check_mode: false
+  tags: [reliability, bbr]
+
+- name: Report pending LXC BBR activations
+  ansible.builtin.debug:
+    msg: >-
+      {{ item.bbr_lxc.item.name }} (LXC {{ item.bbr_lxc.item.vmid }}) currently
+      uses {{ item.stdout | trim }} and would switch its network namespace to
+      bbr.
+  loop: "{{ host_baseline_bbr_lxc_namespaces.results }}"
+  loop_control:
+    label: "{{ item.bbr_lxc.item.name }}"
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - item.stdout | trim != 'bbr'
+  tags: [reliability, bbr]
+
+- name: Activate BBR in selected LXC network namespaces
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ item.bbr_lxc.item.vmid }}"
+      - --
+      - sysctl
+      - -w
+      - net.ipv4.tcp_congestion_control=bbr
+  loop: "{{ host_baseline_bbr_lxc_namespaces.results }}"
+  loop_control:
+    label: "{{ item.bbr_lxc.item.name }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - item.stdout | trim != 'bbr'
+  tags: [reliability, bbr]

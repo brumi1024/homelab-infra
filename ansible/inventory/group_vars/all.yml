@@ -96,6 +96,14 @@ homelab_docker_proxy_container_port: 2375
 # host, because iptables source matching needs a literal address. See
 # roles/host_baseline/tasks/discover_core_tailnet_ip.yml.
 homelab_swap_size_mb: 0
+# TCP BBR is opt-in because the useful setting depends on the network
+# namespace that sends traffic. "module" loads and persists the host kernel
+# module, "namespace" selects BBR in the current namespace, and
+# "module_and_namespace" does both.
+homelab_reliability_tcp_bbr_mode: disabled
+# Proxmox hosts can manage BBR inside selected running LXCs without requiring
+# direct SSH into those containers.
+homelab_reliability_tcp_bbr_lxc_targets: []
 
 # geerlingguy.security owns the generic Linux hardening. Keep these
 # explicit because the root SSH policy is intentionally less strict than
