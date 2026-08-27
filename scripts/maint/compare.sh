@@ -40,23 +40,32 @@ normalize_file() {
         "$source"
 }
 
+# Snapshot the gathered evidence only. run.sh writes its own artifacts into the
+# same directory, and evidence.txt embeds the previous run's diff, so comparing
+# a whole run directory folds every earlier run into the next one's diff and the
+# bundle grows without bound. An allowlist cannot rot as new artifacts appear.
 snapshot() {
     local source_dir=$1
     local destination=$2
     local file
     local relative
+    local -a sources=()
+
+    if [[ -d "$source_dir/checks" ]]; then
+        sources+=("$source_dir/checks")
+    fi
+    if [[ -f "$source_dir/manifest.tsv" ]]; then
+        sources+=("$source_dir/manifest.tsv")
+    fi
 
     : > "$destination"
+    (( ${#sources[@]} > 0 )) || return 0
+
     while IFS= read -r file; do
         relative=${file#"$source_dir/"}
-        case "$relative" in
-            normalized.snapshot|diff.patch|failed-checks.tsv|meta.json)
-                continue
-                ;;
-        esac
         printf '%s\n' "--- $relative" >> "$destination"
         normalize_file "$file" >> "$destination"
-    done < <(find "$source_dir" -type f ! -path "$source_dir/normalized/*" -print | LC_ALL=C sort)
+    done < <(find "${sources[@]}" -type f -print | LC_ALL=C sort)
 }
 
 current_snapshot=$tmp_dir/current.snapshot

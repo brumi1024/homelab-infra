@@ -143,6 +143,18 @@ third=$(run_maint)
 [[ -s "$vault_dir/Reports/2026-08-24-maint.md" ]]
 grep -q -- '- test: fixture changed (fixture)' "$vault_dir/Reports/2026-08-24-maint.md"
 
+# The previous run called the model, so its directory now holds evidence.txt,
+# verdict.json and interpreter.err. Those are not gathered evidence, and
+# evidence.txt embeds that run's diff, so folding them into the next comparison
+# made an otherwise identical run look changed and grew the bundle every day.
+quiet_run=$(run_maint)
+[[ "$quiet_run" == *'status=ok'* ]]
+[[ "$quiet_run" == *'model_called=0'* ]]
+[[ $(wc -l < "$calls/interpreter" | tr -d ' ') == 1 ]]
+
+quiet_dir=$(find "$state_dir" -type f -name manifest.tsv -print | sed 's#/manifest.tsv$##' | LC_ALL=C sort | tail -n 1)
+[[ ! -s "$quiet_dir/diff.patch" ]]
+
 printf 'failed\n' > "$mode_file"
 if run_maint > "$tmp_dir/fourth.out"; then
     printf 'failed verdict unexpectedly returned success\n' >&2
