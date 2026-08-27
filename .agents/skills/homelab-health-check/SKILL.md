@@ -1,20 +1,22 @@
 ---
 name: homelab-health-check
-description: Answer whether the homelab still matches what the notes claim, using read-only checks only. Use for a health check, a status report, "is anything broken", or a spot check before or after other work.
+description: Answer whether the managed homelab passes its read-only checks and, when operator notes exist, still matches their claims. Use for a health check, a status report, "is anything broken", or a spot check before or after other work.
 ---
 
 # Homelab Health Check
 
 Read-only throughout.
-The deliverable is the **deltas**: what the live estate does that the vault does not already say.
-A report that restates the vault has not done the work.
+The deliverable is the live failures and unknowns, plus any delta from configured operator notes.
+A report that merely restates notes has not done the work.
 
-## 1. Take the vault's claim first
+## 1. Resolve optional operator notes
 
-Pull the `agentic-notes` checkout `--ff-only`, then read `Estate/Homelab Overview.md` and the site note for anything the checks will touch.
-Reading the claim first is what makes a delta visible; checks read without it are just output.
+Resolve the notes root in this order: `HOMELAB_NOTES_DIR`, `$HOME/projects/agentic-notes`, then a sibling `agentic-notes` checkout beside this repository.
+When one exists, read its root `AGENTS.md`, pull it `--ff-only`, then read the estate and repository notes relevant to the requested checks.
+Reading the claim first is what makes a delta visible.
 
-A failing pull is noted in the answer and never blocks the rest.
+A missing notes checkout or failing pull is reported as an unavailable comparison lane and never blocks the live checks.
+Do not assume that a fork operator uses the reference deployment's vault structure.
 
 ## 2. Gather evidence
 
@@ -32,9 +34,10 @@ Complete when every failing check and every contradiction between evidence and n
 Lead with the answer: healthy, or the specific thing that is not.
 Green checks that agree with the notes are one line in total, not a list.
 
-## 4. Land the finding in the same session
+## 4. Land the finding when operator notes are configured
 
-Correct what the evidence contradicts: estate facts in `Estate/`, repo state in `Repos/`, and stamp `verified` on any living note checked against the live system.
-Commit and push the vault before answering; a note that lags the estate is a defect.
+When an operator notes checkout was resolved, correct what the evidence contradicts in the locations defined by its own `AGENTS.md`.
+Commit and push that checkout before answering.
+When no notes checkout exists, report the exact live evidence and the missing durable-record destination without creating one inside this public repository.
 
 Fixing what the check found is [homelab-one-off](../homelab-one-off/SKILL.md), and it starts by asking.

@@ -34,7 +34,7 @@ setup: ## Install Python deps into .venv, Ansible collections and roles, create 
 	fi
 
 known-hosts: ## Scan every ansible_host in the inventory into ansible/known_hosts
-	@cd ansible && ansible-inventory $(ANSIBLE_OPTS) --list \
+	@cd ansible && $(VENV_BIN)/ansible-inventory $(ANSIBLE_OPTS) --list \
 		| $(VENV_BIN)/python3 -c "import json, sys; inv = json.load(sys.stdin); print('\n'.join(sorted({h['ansible_host'] for h in inv['_meta']['hostvars'].values() if 'ansible_host' in h})))" \
 		| xargs -I{} ssh-keyscan -H {} > known_hosts 2>/dev/null; \
 	sort -u -o known_hosts known_hosts
@@ -54,19 +54,19 @@ maint-test: ## Shellcheck and run the hermetic scheduled-maintenance tests
 	@bash tests/maint/interpret-test.sh
 
 ping: ## Check connectivity to all hosts
-	@cd ansible && ansible all $(ANSIBLE_OPTS) $(EXTRA_VARS) -m ping
+	@cd ansible && $(VENV_BIN)/ansible all $(ANSIBLE_OPTS) $(EXTRA_VARS) -m ping
 
 verify: ## Run every read-only check (TAGS=security|reliability|tailscale|ssh_access|break_glass|dns|komodo|proxmox, LIMIT=host)
-	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/verify.yml
+	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/verify.yml
 
 bootstrap: ## Install Docker, Core, auth, Periphery, and GitOps. APPLY=1 to mutate, otherwise --check --diff
-	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/bootstrap.yml $(if $(APPLY),,--check --diff)
+	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/bootstrap.yml $(if $(filter 1,$(APPLY)),,--check --diff)
 
 baseline: ## Apply the host baseline. APPLY=1 to mutate, otherwise --check --diff
-	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/baseline.yml $(if $(APPLY),,--check --diff)
+	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/baseline.yml $(if $(filter 1,$(APPLY)),,--check --diff)
 
 upgrade: ## Upgrade Core then Periphery. APPLY=1 to mutate, otherwise --check --diff
-	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/upgrade.yml $(if $(APPLY),,--check --diff)
+	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/upgrade.yml $(if $(filter 1,$(APPLY)),,--check --diff)
 
 guest: ## Create, snapshot, or resize an LXC. Set GUEST_ACTION; APPLY=1 to mutate, otherwise --check --diff
 	@if [ -z "$(GUEST_ACTION)" ]; then \
@@ -82,15 +82,15 @@ guest: ## Create, snapshot, or resize an LXC. Set GUEST_ACTION; APPLY=1 to mutat
 	fi
 
 periphery-uninstall: ## Remove Komodo Periphery from every node. Requires APPLY=1
-	@if [ -z "$(APPLY)" ]; then \
+	@if [ "$(APPLY)" != "1" ]; then \
 		echo "Refusing to uninstall Periphery without APPLY=1"; \
 		exit 1; \
 	fi
-	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) --tags periphery -e komodo_action=uninstall playbooks/bootstrap.yml
+	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) --tags periphery -e komodo_action=uninstall playbooks/bootstrap.yml
 
-run: ## Run any playbook directly. Usage: make run PLAYBOOK=verify.yml OPTS="--check --diff"
+run: ## Run any playbook directly. APPLY=1 to mutate, otherwise --check --diff
 	@if [ -z "$(PLAYBOOK)" ]; then \
 		echo "PLAYBOOK variable required. Usage: make run PLAYBOOK=verify.yml"; \
 		exit 1; \
 	fi
-	@cd ansible && ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) playbooks/$(PLAYBOOK) $(OPTS)
+	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) playbooks/$(PLAYBOOK) $(OPTS) $(if $(filter 1,$(APPLY)),,--check --diff)
