@@ -6,7 +6,12 @@ description: Apply and record a single ad hoc fix to a live homelab host, with t
 # Homelab One-Off Fix
 
 A one-off is a fix applied now to one host.
-The ledger entry is part of the fix, not paperwork after it: `Incidents/one-offs.md` is what turns a second occurrence into a grep.
+Its durable operator record is part of the fix, not paperwork after it.
+
+Resolve the operator notes root in this order: `HOMELAB_NOTES_DIR`, `$HOME/projects/agentic-notes`, then a sibling `agentic-notes` checkout beside this repository.
+When a checkout exists, read and follow its root `AGENTS.md` before using its incident ledger.
+When none exists, ask the operator where one-off evidence is recorded before applying a live change.
+Do not create private operational state inside this public repository.
 
 ## 1. Establish the fault
 
@@ -15,7 +20,7 @@ Name the host and the evidence before proposing anything; a fix aimed at a patte
 
 ## 2. Check whether this is the second time
 
-Grep `Incidents/one-offs.md` for the host and the symptom.
+Search the resolved incident ledger for the host and the symptom.
 
 A previous entry changes the work: the durable fix belongs in `host_baseline` or the relevant role, so the estate stops needing the same repair.
 Say so, and propose that instead.
@@ -35,5 +40,5 @@ Complete when the original evidence is gone, not when the command exited zero.
 
 ## 5. Record it
 
-Append to `Incidents/one-offs.md`: the date, the host, the symptom, what was run, and the evidence it worked.
-Update `Estate/` or `Repos/` for anything the fix made newly true, then commit and push the vault in the same session.
+Record the date, host, symptom, command or action, and verification evidence in the operator's incident ledger.
+Update any living state notes required by that checkout's instructions, then commit and push it in the same session.

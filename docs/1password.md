@@ -1,187 +1,137 @@
-# 1Password Setup Guide
+# 1Password setup
 
-This document lists all required 1Password items and fields for this infrastructure deployment. All items must be created in the **"Homelab Ansible"** vault.
+This repository reads every credential from one 1Password vault at run time.
+The default vault name is `Homelab Ansible`.
+A fork can set `homelab_op_vault` under `all.vars` in its gitignored `ansible/inventory/hosts.yml` without changing committed defaults.
 
-## Required Vault
+## Control-machine authentication
 
-- **Vault Name**: `Homelab Ansible`
+An interactive machine can use the authenticated 1Password desktop integration.
+A headless control machine or CI runner must expose `OP_SERVICE_ACCOUNT_TOKEN` to `op` through its private process environment.
+Do not store that token in this repository or in inventory.
 
-## Service account access
+Most playbook operations need read access to every item described as required below.
+The first applied bootstrap also creates a Komodo service-user API key and writes its key and secret into the `Komodo` item.
+The control-machine identity therefore needs permission to edit that item before `make bootstrap APPLY=1` can complete.
 
-A machine with no desktop 1Password app (a CI runner, a headless agent host) authenticates `op` from a service account token instead.
-`make bootstrap APPLY=1` writes the API key it creates back into the `Komodo` item, so that service account needs write access to `Komodo` specifically.
-Every other target only reads; read access to the vault is enough for everything except that one write.
+## Items required by the current bootstrap
 
-## Required Items
+The current Core templates enable OIDC and configure komodo-op unconditionally.
+The OIDC fields, 1Password Connect document, and komodo-op access token are therefore required for a complete bootstrap rather than optional add-ons.
 
-### 1. Komodo (Primary Credentials)
+### `Komodo`
 
-**Item Name**: `Komodo`  
-**Item Type**: Login
+Create a Login item named `Komodo` with these fields.
 
-#### Required Fields:
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `username` | Text | Initial local Komodo administrator username. |
+| `password` | Password | Initial local Komodo administrator password. |
+| `komodo_db_username` | Text | MongoDB username used by the Core compose stack. |
+| `komodo_db_password` | Password | MongoDB password used by the Core compose stack. |
+| `komodo_host` | Text | External Komodo hostname or URL. |
+| `komodo_webhook_secret` | Password | Webhook signing secret. |
+| `komodo_jwt_secret` | Password | JWT signing secret. |
+| `komodo_oidc_provider` | Text | OIDC provider URL reachable from the Core container. |
+| `komodo_oidc_redirect_host` | Text | OIDC redirect hostname. |
+| `komodo_oidc_client_id` | Text | OIDC client identifier. |
+| `komodo_oidc_client_secret` | Password | OIDC client secret. |
+| `komodo_api_key` | Text | Service-user API key created and maintained by the bootstrap role. |
+| `komodo_api_secret` | Password | Service-user API secret created and maintained by the bootstrap role. |
 
-| Field Name | Type | Description | Example |
-|------------|------|-------------|---------|
-| `username` | Text | Komodo admin username | `admin` |
-| `password` | Password | Komodo admin password | `secure-admin-password` |
-| `komodo_api_key` | Text | API key for Komodo authentication | `komodo_api_12345...` |
-| `komodo_api_secret` | Password | API secret for Komodo authentication | `secret_67890...` |
-| `komodo_db_username` | Text | MongoDB database username | `komodo` |
-| `komodo_db_password` | Password | MongoDB database password | `db-password` |
-| `komodo_host` | Text | External hostname for Komodo | `komodo.yourdomain.com` |
-| `komodo_webhook_secret` | Password | Webhook security secret | `webhook-secret` |
-| `komodo_jwt_secret` | Password | JWT token signing secret | `jwt-secret` |
+The API fields may be absent before the first bootstrap.
+The bootstrap adds them after Core starts, then renders Core again so subsequent API automation and `bin/komodo` use the stored pair.
+An existing Core that must retain a known automation identity should provide its existing pair instead of forcing recreation.
 
-#### OIDC Fields (Optional):
+### `Network`
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `komodo_oidc_provider` | Text | OIDC provider URL |
-| `komodo_oidc_redirect_host` | Text | OIDC redirect hostname |
-| `komodo_oidc_client_id` | Text | OIDC client identifier |
-| `komodo_oidc_client_secret` | Password | OIDC client secret |
+Create a Login item named `Network`.
 
-### 2. Network
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `tailnet` | Text | Tailscale network domain used for DNS search configuration. |
 
-**Item Name**: `Network`  
-**Item Type**: Login
+### `Komodo Github Provider Account`
 
-#### Required Fields:
+Create a Login item named `Komodo Github Provider Account`.
 
-| Field Name | Type | Description | Example |
-|------------|------|-------------|---------|
-| `tailnet` | Text | Tailscale network domain | `tail12345.ts.net` |
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `username` | Text | Git provider account name used by Komodo. |
+| `token` | Password | Git provider token used by Komodo resource syncs. |
 
-### 3. Komodo Github Provider Account
+Grant the token read access to `komodo_resource_syncs_repo` and to every repository referenced by the sync declarations it loads.
+Use the narrowest repository and contents permissions that satisfy those reads.
 
-**Item Name**: `Komodo Github Provider Account`  
-**Item Type**: Login
+### `Komodo Homelab Credentials File`
 
-#### Required Fields:
+Create a Document item named `Komodo Homelab Credentials File`.
+Attach the 1Password Connect credentials JSON document and add this field.
 
-| Field Name | Type | Description | Example |
-|------------|------|-------------|---------|
-| `username` | Text | GitHub username for repository access | `brumi1024` |
-| `token` | Password | GitHub personal access token | `ghp_xxxxxxxxxxxx` |
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `op_vault_uuid` | Text | UUID of the source vault projected by komodo-op. |
 
-**Note**: The GitHub token needs repository read access for:
-- `brumi1024/deploy-komodo-op` (komodo-op stack definitions)
-- `brumi1024/komodo-app-stacks` (application stack definitions)
+The bootstrap embeds the document and vault UUID in Core's secret store for the bundled komodo-op stack.
 
-### 4. Komodo Homelab Credentials File
+### `Komodo Homelab Access Token: Komodo Homelab Stacks`
 
-**Item Name**: `Komodo Homelab Credentials File`  
-**Item Type**: Document
+Create an API Credential item named `Komodo Homelab Access Token: Komodo Homelab Stacks`.
 
-#### Required Fields:
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `credential` | Password | 1Password service-account token used by komodo-op. |
 
-| Field Name | Type | Description | Example |
-|------------|------|-------------|---------|
-| `op_vault_uuid` | Text | 1Password vault UUID for komodo-op sync | `abcdef12-3456-7890-abcd-ef1234567890` |
+This is the runtime token that komodo-op uses inside the managed stack.
+It is distinct from the control machine's `OP_SERVICE_ACCOUNT_TOKEN`, even if an operator intentionally gives both identities equivalent access.
 
-#### Required Document:
+## Feature-specific items
 
-- **File Name**: `1password-credentials.json`
-- **Content**: 1Password Connect credentials JSON file
-- **Note**: This document contains the credentials file for 1Password Connect server
+These items are required only when the corresponding inventory feature is used.
 
-### 5. Komodo Homelab Access Token: Komodo Homelab Stacks
+### `Proxmox`
 
-**Item Name**: `Komodo Homelab Access Token: Komodo Homelab Stacks`  
-**Item Type**: API Credential
+Create an API Credential or Login item named `Proxmox` before applying a guest `create` or `snapshot` action.
+The `resize` action uses `pct` over SSH and does not read this item.
 
-#### Required Fields:
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `api_user` | Text | Proxmox API user including its realm. |
+| `api_token_id` | Text | Proxmox API token identifier. |
+| `api_token_secret` | Password | Proxmox API token secret. |
 
-| Field Name | Type | Description | Example |
-|------------|------|-------------|---------|
-| `credential` | Password | 1Password Connect service account token | `ops_xxxxxxxxxxxxxxxxxx` |
+Grant only the Proxmox permissions needed for the requested guest operations.
+The role marks credential-bearing tasks `no_log` and never writes these values to a repository file.
 
-### 6. Proxmox
+### `SSH Break Glass`
 
-**Item Name**: `Proxmox`
+Create an SSH Key item named `SSH Break Glass` only when `homelab_ssh_break_glass_enabled` is true for at least one host.
 
-**Item Type**: API Credential or Login
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `public key` | Text | OpenSSH Ed25519 public key installed on selected recovery hosts. |
 
-The `proxmox_guest` role reads these fields at run time for API-backed LXC
-creation and snapshots.
+Generate the key in 1Password so the private half remains there and can be used through the 1Password SSH agent.
+The role reads only the public field.
 
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `api_user` | Text | Proxmox API user, including its realm, for example `root@pam` or a dedicated service user |
-| `api_token_id` | Text | Proxmox API token identifier |
-| `api_token_secret` | Password | Proxmox API token secret |
+## Setup and verification
 
-Grant the token only the permissions needed for the intended guest operations.
-The role never writes these values to a file or task log.
+1. Create the vault or choose an existing dedicated vault.
+2. Add the required items with the exact names and case-sensitive field names above.
+3. Add feature-specific items only for features enabled in the private inventory.
+4. Give the control-machine identity read access to the required items and edit access to `Komodo` for the first applied bootstrap.
+5. Configure the Git provider token for the repositories referenced by the fork's resource syncs.
 
-### 7. SSH Break Glass
-
-**Item Name**: `SSH Break Glass`
-
-**Item Type**: SSH Key
-
-Generate one Ed25519 key directly in 1Password.
-The private key remains in 1Password and is used through the 1Password SSH agent.
-The infrastructure role reads only the public field.
-
-| Field Name | Type | Description |
-|------------|------|-------------|
-| `public key` | Text | OpenSSH Ed25519 public key installed on tier-0 hosts |
-
-## Setup Instructions
-
-### Step 1: Create Vault
-
-1. Open 1Password
-2. Create a new vault named **"Homelab Ansible"**
-3. Ensure your Ansible control machine has access to this vault
-
-### Step 2: Create Items
-
-For each item listed above:
-
-1. **Create new item** with the exact name specified
-2. **Add all required fields** with the exact field names (case-sensitive)
-3. **Generate secure values** for passwords and secrets
-4. **Document the purpose** in the item notes if helpful
-
-### Step 3: Special Setup for Credentials File
-
-1. **Obtain 1Password Connect credentials**:
-   - Set up 1Password Connect server
-   - Download the credentials JSON file
-   
-2. **Create document item**:
-   - Item name: `Komodo Homelab Credentials File`
-   - Upload the credentials JSON file
-   - Add `op_vault_uuid` field with your vault's UUID
-
-3. **Find vault UUID**:
-   ```bash
-   op vault list --format=json | jq -r '.[] | select(.name=="Homelab Ansible") | .id'
-   ```
-
-### Step 4: GitHub Token Setup
-
-1. **Generate GitHub Personal Access Token**:
-   - Go to GitHub → Settings → Developer settings → Personal access tokens
-   - Create token with `repo` scope
-   - Copy the token value
-
-2. **Add to 1Password**:
-   - Create `Komodo Github Provider Account` item
-   - Add GitHub username and token
-
-### Step 5: Verify Setup
-
-Test 1Password CLI access:
+Verify access without printing item contents.
 
 ```bash
-# Test basic authentication
 op account list
-
-# Test specific lookups
-op item get "Komodo" --vault "Homelab Ansible"
-op item get "Network" --vault "Homelab Ansible"
+op item get "Komodo" --vault "My Homelab Vault" >/dev/null
+op item get "Network" --vault "My Homelab Vault" >/dev/null
+op item get "Komodo Github Provider Account" --vault "My Homelab Vault" >/dev/null
+op item get "Komodo Homelab Credentials File" --vault "My Homelab Vault" >/dev/null
+op item get "Komodo Homelab Access Token: Komodo Homelab Stacks" --vault "My Homelab Vault" >/dev/null
 ```
+
+Run `make bootstrap` without `APPLY=1` only after these lookups succeed.
+Review that dry-run output before authorizing the exact `APPLY=1` run.

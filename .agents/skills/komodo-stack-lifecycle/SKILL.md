@@ -7,6 +7,7 @@ description: Add or remove a Komodo-managed application stack across homelab-inf
 
 Treat repository files as rebuildable shape and the running Komodo Core as deployment state.
 Resolve all participating repository roots before editing, and preserve each repository's own `AGENTS.md` rules.
+Use explicit paths supplied by the operator, configured sync repositories, or sibling checkouts rather than assuming one workspace layout.
 
 ## Add a stack
 
@@ -25,4 +26,5 @@ The work is complete only when the runtime disposition, persistent-data decision
 Use `homelab-infra/bin/komodo` for Komodo API reads and for explicitly authorized writes.
 Keep discovery and planning read-only.
 Never infer that removing a declaration deletes runtime resources or persistent data.
-Record live verification or one-off repair evidence in the private `agentic-notes` checkout in the same session.
+If `HOMELAB_NOTES_DIR` or another operator-specified operations checkout exists, follow its own instructions and record live verification there in the same session.
+Otherwise report the exact evidence and the missing durable-record destination without placing deployment state in this public repository.
