@@ -1,0 +1,133 @@
+---
+- name: Check whether TCP BBR is loaded
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -q
+      - '^tcp_bbr '
+      - /proc/modules
+  register: host_baseline_verify_bbr_module
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: >-
+    homelab_reliability_tcp_bbr_mode in ['module', 'module_and_namespace']
+    or homelab_reliability_tcp_bbr_lxc_targets | length > 0
+
+- name: Check whether TCP BBR is persisted
+  ansible.builtin.shell: >-
+    grep -q -x tcp_bbr /etc/modules-load.d/*.conf
+  register: host_baseline_verify_bbr_module_persistent
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: >-
+    homelab_reliability_tcp_bbr_mode in ['module', 'module_and_namespace']
+    or homelab_reliability_tcp_bbr_lxc_targets | length > 0
+
+- name: Record a missing or unpersisted TCP BBR module
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' must have tcp_bbr loaded and persisted.']
+      }}
+  when:
+    - >-
+      homelab_reliability_tcp_bbr_mode in ['module', 'module_and_namespace']
+      or homelab_reliability_tcp_bbr_lxc_targets | length > 0
+    - >-
+      host_baseline_verify_bbr_module.rc != 0
+      or host_baseline_verify_bbr_module_persistent.rc != 0
+
+- name: Read current-namespace congestion control
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - -n
+      - net.ipv4.tcp_congestion_control
+  register: host_baseline_verify_bbr_namespace
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+
+- name: Check current-namespace BBR persistence
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Eq
+      - '^\s*net\.ipv4\.tcp_congestion_control\s*=\s*bbr\s*$'
+      - /etc/sysctl.d/99-tcp-bbr.conf
+  register: host_baseline_verify_bbr_namespace_persistent
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+
+- name: Record current-namespace BBR drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' must use and persist bbr in its network namespace.']
+      }}
+  when:
+    - homelab_reliability_tcp_bbr_mode in ['namespace', 'module_and_namespace']
+    - >-
+      host_baseline_verify_bbr_namespace.rc != 0
+      or host_baseline_verify_bbr_namespace.stdout | trim != 'bbr'
+      or host_baseline_verify_bbr_namespace_persistent.rc != 0
+
+- name: Read selected LXC congestion-control state
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ item.vmid }}"
+      - --
+      - sysctl
+      - -n
+      - net.ipv4.tcp_congestion_control
+  loop: "{{ homelab_reliability_tcp_bbr_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_baseline_verify_bbr_lxc_namespaces
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check selected LXC BBR persistence
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ item.vmid }}"
+      - --
+      - grep
+      - -Eq
+      - '^\s*net\.ipv4\.tcp_congestion_control\s*=\s*bbr\s*$'
+      - /etc/sysctl.d/99-tcp-bbr.conf
+  loop: "{{ homelab_reliability_tcp_bbr_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_baseline_verify_bbr_lxc_persistence
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record selected LXC BBR drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [item.item.name ~ ' must use and persist bbr in its network namespace.']
+      }}
+  loop: "{{ host_baseline_verify_bbr_lxc_namespaces.results }}"
+  loop_control:
+    index_var: bbr_lxc_index
+    label: "{{ item.item.name }}"
+  when: >-
+    item.rc != 0
+    or item.stdout | trim != 'bbr'
+    or host_baseline_verify_bbr_lxc_persistence.results[bbr_lxc_index].rc != 0

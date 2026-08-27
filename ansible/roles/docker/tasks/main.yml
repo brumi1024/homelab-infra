@@ -8,8 +8,9 @@
         if homelab_docker_dns_enabled | bool
         else docker_daemon_options
       }}
+  tags: [docker_packages, docker_config]
 
-- name: Install and configure Docker
+- name: Install Docker packages and service
   ansible.builtin.include_role:
     name: geerlingguy.docker
   vars:
@@ -17,4 +18,20 @@
     docker_install_compose_plugin: true
     docker_users:
       - "{{ ansible_user }}"
-    docker_daemon_options: "{{ docker_role_daemon_options }}"
+    docker_daemon_options: {}
+  tags: docker_packages
+
+- name: Ensure the Docker configuration directory exists
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: "0755"
+  tags: docker_config
+
+- name: Configure Docker daemon options
+  ansible.builtin.copy:
+    content: "{{ docker_role_daemon_options | to_nice_json }}"
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+  notify: Restart Docker after daemon configuration
+  tags: docker_config

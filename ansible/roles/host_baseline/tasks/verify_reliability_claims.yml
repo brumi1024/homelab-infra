@@ -1,0 +1,221 @@
+---
+- name: Check inventory-selected system services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+  loop: "{{ homelab_verify_system_services }}"
+  register: host_baseline_verify_system_services_state
+  changed_when: false
+  failed_when: false
+
+- name: Record inactive inventory-selected system services
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' system service is not active: ' ~ item.item]
+      }}
+  loop: "{{ host_baseline_verify_system_services_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.status.ActiveState | default('') != 'active'
+
+- name: Check inventory-selected user services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    scope: user
+  become: true
+  become_user: "{{ homelab_verify_user }}"
+  loop: "{{ homelab_verify_user_services }}"
+  register: host_baseline_verify_user_services_state
+  changed_when: false
+  failed_when: false
+  when: homelab_verify_user | length > 0
+
+- name: Record inactive inventory-selected user services
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' user service is not active: ' ~ item.item]
+      }}
+  loop: "{{ host_baseline_verify_user_services_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not item.skipped | default(false)
+    - item.status.ActiveState | default('') != 'active'
+
+- name: Read the default-route interface MTU
+  ansible.builtin.command:
+    argv:
+      - cat
+      - "/sys/class/net/{{ ansible_facts.default_ipv4.interface }}/mtu"
+  register: host_baseline_verify_default_route_mtu_state
+  changed_when: false
+  check_mode: false
+  when: homelab_verify_default_route_mtu is not none
+
+- name: Record default-route MTU drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' default-route MTU is '
+           ~ (host_baseline_verify_default_route_mtu_state.stdout | trim)
+           ~ ', expected ' ~ homelab_verify_default_route_mtu]
+      }}
+  when:
+    - homelab_verify_default_route_mtu is not none
+    - host_baseline_verify_default_route_mtu_state.stdout | int != homelab_verify_default_route_mtu | int
+
+- name: Inspect inventory-required paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ homelab_verify_required_paths }}"
+  register: host_baseline_verify_required_paths_state
+
+- name: Record missing inventory-required paths
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' required path is missing: ' ~ item.item]
+      }}
+  loop: "{{ host_baseline_verify_required_paths_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not item.stat.exists
+
+- name: Check forbidden fstab mount targets
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --fstab
+      - --target
+      - "{{ item }}"
+  loop: "{{ homelab_verify_absent_fstab_mounts }}"
+  register: host_baseline_verify_absent_fstab_mounts_state
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record forbidden fstab mount targets
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' retains a forbidden fstab mount target: ' ~ item.item]
+      }}
+  loop: "{{ host_baseline_verify_absent_fstab_mounts_state.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc == 0
+
+- name: Check the local gateway MTU clamp service
+  ansible.builtin.systemd:
+    name: gateway-mtu-clamp.service
+  register: host_baseline_verify_gateway_mtu_clamp_service
+  changed_when: false
+  failed_when: false
+  when: homelab_verify_gateway_mtu_clamp_enabled | bool
+
+- name: Check the local gateway route MTU
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    gateway=$(ip -4 route show default | awk 'NR == 1 { print $3 }');
+    test -n "$gateway" && ip -4 route get "$gateway" | grep -Eq '\bmtu 1500\b'
+  args:
+    executable: /bin/bash
+  register: host_baseline_verify_gateway_mtu_clamp_route
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: homelab_verify_gateway_mtu_clamp_enabled | bool
+
+- name: Record local gateway MTU clamp drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' gateway MTU clamp is not enabled, active, and applied.']
+      }}
+  when:
+    - homelab_verify_gateway_mtu_clamp_enabled | bool
+    - >-
+      host_baseline_verify_gateway_mtu_clamp_service.status.ActiveState | default('') != 'active'
+      or host_baseline_verify_gateway_mtu_clamp_service.status.UnitFileState | default('') != 'enabled'
+      or host_baseline_verify_gateway_mtu_clamp_route.rc != 0
+
+- name: Check selected LXC gateway MTU clamp services
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ item.vmid }}"
+      - --
+      - systemctl
+      - is-enabled
+      - --quiet
+      - gateway-mtu-clamp.service
+  loop: "{{ homelab_verify_gateway_mtu_clamp_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_baseline_verify_gateway_mtu_clamp_lxc_enabled
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check selected LXC gateway MTU clamp state
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ item.vmid }}"
+      - --
+      - systemctl
+      - is-active
+      - --quiet
+      - gateway-mtu-clamp.service
+  loop: "{{ homelab_verify_gateway_mtu_clamp_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_baseline_verify_gateway_mtu_clamp_lxc_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check selected LXC gateway route MTUs
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ item.vmid }}"
+      - --
+      - sh
+      - -c
+      - >-
+        gateway=$(ip -4 route show default | awk 'NR == 1 { print $3 }');
+        test -n "$gateway" && ip -4 route get "$gateway" | grep -Eq '\bmtu 1500\b'
+  loop: "{{ homelab_verify_gateway_mtu_clamp_lxc_targets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: host_baseline_verify_gateway_mtu_clamp_lxc_routes
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Record selected LXC gateway MTU clamp drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [item.item.name ~ ' gateway MTU clamp is not enabled, active, and applied.']
+      }}
+  loop: "{{ host_baseline_verify_gateway_mtu_clamp_lxc_enabled.results }}"
+  loop_control:
+    index_var: mtu_lxc_index
+    label: "{{ item.item.name }}"
+  when: >-
+    item.rc != 0
+    or host_baseline_verify_gateway_mtu_clamp_lxc_active.results[mtu_lxc_index].rc != 0
+    or host_baseline_verify_gateway_mtu_clamp_lxc_routes.results[mtu_lxc_index].rc != 0

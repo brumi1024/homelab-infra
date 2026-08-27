@@ -431,24 +431,50 @@
   tags: tailscale
 
 - name: Check failed system services  # noqa command-instead-of-module
-  ansible.builtin.command: systemctl --failed --no-legend
+  ansible.builtin.command: systemctl list-units --failed --no-legend --plain --type=service
   register: host_baseline_verify_failed_units
   changed_when: false
   failed_when: false
   check_mode: false
-  when: inventory_hostname in groups['komodo']
+  when: inventory_hostname != 'localhost'
   tags: reliability
 
-- name: Record failed system services
+- name: Identify unexpected failed system services
+  ansible.builtin.set_fact:
+    host_baseline_verify_failed_unit_names: >-
+      {{ host_baseline_verify_failed_units.stdout_lines | map('split') | map('first') | list }}
+    host_baseline_verify_unexpected_failed_units: >-
+      {{
+        host_baseline_verify_failed_units.stdout_lines
+        | map('split')
+        | map('first')
+        | difference(homelab_verify_ignored_failed_system_units)
+        | list
+      }}
+  when: inventory_hostname != 'localhost'
+  tags: reliability
+
+- name: Report explicitly ignored failed system services
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} has investigated failed units explicitly ignored by inventory:
+      {{ host_baseline_verify_failed_unit_names | intersect(homelab_verify_ignored_failed_system_units) | join(', ') }}
+  when:
+    - inventory_hostname != 'localhost'
+    - host_baseline_verify_failed_unit_names | intersect(homelab_verify_ignored_failed_system_units) | length > 0
+  tags: reliability
+
+- name: Record unexpected failed system services
   ansible.builtin.set_fact:
     host_baseline_verify_failures: >-
       {{
         host_baseline_verify_failures
-        + [inventory_hostname ~ ' has failed units: ' ~ (host_baseline_verify_failed_units.stdout_lines | join(', '))]
+        + [inventory_hostname ~ ' has unexpected failed units: '
+           ~ (host_baseline_verify_unexpected_failed_units | join(', '))]
       }}
   when:
-    - inventory_hostname in groups['komodo']
-    - host_baseline_verify_failed_units.stdout_lines | length > 0
+    - inventory_hostname != 'localhost'
+    - host_baseline_verify_unexpected_failed_units | length > 0
   tags: reliability
 
 - name: Check unhealthy containers
@@ -472,6 +498,20 @@
     - inventory_hostname in groups['komodo']
     - host_baseline_verify_unhealthy_containers.stdout_lines | length > 0
   tags: reliability
+
+- name: Verify inventory-selected reliability claims
+  ansible.builtin.include_tasks:
+    file: verify_reliability_claims.yml
+    apply:
+      tags: reliability
+  tags: reliability
+
+- name: Verify opt-in TCP BBR state
+  ansible.builtin.include_tasks:
+    file: verify_bbr.yml
+    apply:
+      tags: [reliability, bbr]
+  tags: [reliability, bbr]
 
 # --- dns --------------------------------------------------------------
 
@@ -520,6 +560,13 @@
     - inventory_hostname in groups['komodo']
     - homelab_host_dns_enabled | bool
     - host_baseline_verify_dns_public.rc != 0 or host_baseline_verify_dns_tailnet.rc != 0
+  tags: dns
+
+- name: Verify durable DNS ownership and Docker resolver state
+  ansible.builtin.include_tasks:
+    file: verify_dns_shape.yml
+    apply:
+      tags: dns
   tags: dns
 
 # --- komodo -------------------------------------------------------------

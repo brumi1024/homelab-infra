@@ -1,0 +1,158 @@
+---
+- name: Detect systemd-resolved for DNS shape verification
+  ansible.builtin.systemd:
+    name: systemd-resolved.service
+  register: host_baseline_verify_dns_resolved
+  failed_when: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+
+- name: Detect dhclient for DNS shape verification
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /sbin/dhclient
+    - /usr/sbin/dhclient
+  register: host_baseline_verify_dns_dhclient_paths
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+
+- name: Decide which durable DNS shape applies
+  ansible.builtin.set_fact:
+    host_baseline_verify_dns_resolved_expected: >-
+      {{
+        host_baseline_verify_dns_resolved.status is defined
+        and host_baseline_verify_dns_resolved.status.ActiveState | default('') == 'active'
+      }}
+    host_baseline_verify_dns_dhclient_hook_expected: >-
+      {{
+        (
+          host_baseline_verify_dns_resolved.status is not defined
+          or host_baseline_verify_dns_resolved.status.ActiveState | default('') != 'active'
+        )
+        and (
+          host_baseline_verify_dns_dhclient_paths.results
+          | selectattr('stat.exists', 'equalto', true)
+          | list
+          | length > 0
+        )
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+
+- name: Inspect resolv.conf ownership
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: host_baseline_verify_dns_resolv_conf
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_resolved_expected | bool
+
+- name: Inspect the Proxmox resolv.conf guard
+  ansible.builtin.stat:
+    path: /etc/.pve-ignore.resolv.conf
+  register: host_baseline_verify_dns_pve_guard
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_resolved_expected | bool
+    - ansible_facts.virtualization_type | default('') == 'lxc'
+
+- name: Record systemd-resolved ownership drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' does not preserve systemd-resolved ownership across LXC restarts.']
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_resolved_expected | bool
+    - >-
+      not host_baseline_verify_dns_resolv_conf.stat.islnk | default(false)
+      or host_baseline_verify_dns_resolv_conf.stat.lnk_source | default('')
+        != '/run/systemd/resolve/stub-resolv.conf'
+      or (
+        ansible_facts.virtualization_type | default('') == 'lxc'
+        and not host_baseline_verify_dns_pve_guard.stat.exists | default(false)
+      )
+
+- name: Inspect the dhclient Tailscale resolver hook
+  ansible.builtin.stat:
+    path: /etc/dhcp/dhclient-enter-hooks.d/zz-tailscale-resolv-conf
+  register: host_baseline_verify_dns_dhclient_hook
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_dhclient_hook_expected | bool
+
+- name: Check the dhclient resolver no-op
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -Fqx
+      - 'make_resolv_conf() { : ; }'
+      - /etc/dhcp/dhclient-enter-hooks.d/zz-tailscale-resolv-conf
+  register: host_baseline_verify_dns_dhclient_noop
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_dhclient_hook_expected | bool
+    - host_baseline_verify_dns_dhclient_hook.stat.exists | default(false)
+
+- name: Record dhclient resolver-hook drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' lacks the mode-0644 dhclient Tailscale resolver no-op.']
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_host_dns_enabled | bool
+    - host_baseline_verify_dns_dhclient_hook_expected | bool
+    - >-
+      not host_baseline_verify_dns_dhclient_hook.stat.exists | default(false)
+      or host_baseline_verify_dns_dhclient_hook.stat.mode | default('') != '0644'
+      or host_baseline_verify_dns_dhclient_noop.rc | default(1) != 0
+
+- name: Inspect Docker daemon DNS configuration
+  ansible.builtin.slurp:
+    path: /etc/docker/daemon.json
+  register: host_baseline_verify_docker_daemon
+  no_log: true
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_dns_enabled | bool
+
+- name: Parse Docker daemon DNS configuration
+  ansible.builtin.set_fact:
+    host_baseline_verify_docker_daemon_json: >-
+      {{ host_baseline_verify_docker_daemon.content | b64decode | from_json }}
+  no_log: true
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_dns_enabled | bool
+
+- name: Record Docker daemon DNS drift
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' Docker DNS servers or search domains do not match inventory.']
+      }}
+  when:
+    - inventory_hostname in groups['komodo']
+    - homelab_docker_dns_enabled | bool
+    - >-
+      host_baseline_verify_docker_daemon_json.dns | default([]) != homelab_docker_dns_servers
+      or host_baseline_verify_docker_daemon_json['dns-search'] | default([]) != homelab_docker_dns_search
