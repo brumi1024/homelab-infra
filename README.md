@@ -38,7 +38,10 @@ Both environments read the same 1Password vault and the same inventory shape; on
 `scripts/maint/run.sh` gathers the read-only checks, diffs them against the previous run, and calls a model only when the diff is non-empty or a check failed.
 Raw evidence stays on the running machine under `~/.local/state/maint/`; the distilled report and the one-line-per-run index are written to `Reports/` in the notes checkout named by `MAINT_VAULT_DIR`.
 When that checkout is a git repository the run pulls it `--ff-only` before writing and commits only the `Reports/` pathspec, so an operator's unrelated edits are never swept into a machine commit.
-A pull or push failure is logged and the run continues; set `MAINT_SKIP_VAULT_PUBLISH=1` to keep the reports local.
+Only one run can hold the state-directory lock, so a timer and a manual run cannot gather or publish concurrently.
+A failed pull keeps the report under the raw run directory and does not modify the stale vault checkout.
+A failed add, commit, or push makes the unattended run fail loudly; a rejected push leaves its local commit for operator reconciliation.
+Set `MAINT_SKIP_VAULT_PUBLISH=1` to keep reports under the raw run directory deliberately.
 
 ## Maintenance interpretation backends
 

@@ -1,4 +1,4 @@
-.PHONY: help setup known-hosts lint syntax ping verify bootstrap baseline upgrade guest periphery-uninstall run
+.PHONY: help setup known-hosts lint syntax maint-test ping verify bootstrap baseline upgrade guest periphery-uninstall run
 
 ANSIBLE_DIR := ansible
 INVENTORY := inventory/hosts.yml
@@ -47,6 +47,11 @@ syntax: ## Syntax-check every playbook against hosts.example.yml
 	@cd ansible && for playbook in playbooks/*.yml; do \
 		$(VENV_BIN)/ansible-playbook -i inventory/hosts.example.yml "$$playbook" --syntax-check || exit 1; \
 	done
+
+maint-test: ## Shellcheck and run the hermetic scheduled-maintenance tests
+	@shellcheck scripts/maint/*.sh tests/maint/*.sh
+	@bash tests/maint/run-test.sh
+	@bash tests/maint/interpret-test.sh
 
 ping: ## Check connectivity to all hosts
 	@cd ansible && ansible all $(ANSIBLE_OPTS) $(EXTRA_VARS) -m ping

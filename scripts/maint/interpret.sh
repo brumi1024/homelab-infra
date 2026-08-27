@@ -321,6 +321,9 @@ run_openai_compatible() {
         :
     else
         local rc=$?
+        if (( rc == 28 )); then
+            die "$backend backend exceeded ${timeout_seconds}s timeout"
+        fi
         die "$backend backend failed (exit $rc)"
     fi
 
