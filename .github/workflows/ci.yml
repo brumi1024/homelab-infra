@@ -27,6 +27,9 @@ jobs:
       - name: Syntax check
         run: make syntax
 
+      - name: Scheduled maintenance tests
+        run: make maint-test
+
       - name: Scan for secrets
         uses: gitleaks/gitleaks-action@v3
         env:

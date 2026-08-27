@@ -10,10 +10,11 @@ The repository is split along one line.
 | | Lives in | Examples |
 | --- | --- | --- |
 | Shape | git, public | roles, playbooks, `group_vars/` defaults, templates, Makefile, docs |
-| State | operator machine, gitignored | `ansible/inventory/hosts.yml`, `private/`, editor and agent settings |
+| State | operator machine, gitignored or external | `ansible/inventory/hosts.yml`, `ansible/known_hosts`, local agent settings, optional operations notes |
 | Secrets | 1Password | every credential, referenced by lookup against `homelab_op_vault` |
 
-A fork takes the shape unchanged, supplies its own `hosts.yml` and 1Password vault, and never has to edit a committed file to run.
+A fork reuses the roles and playbooks, supplies its own `hosts.yml` and 1Password vault, and overrides reference-deployment defaults in that private inventory.
+No deployment state or secret needs to enter a committed file.
 
 ## Control plane
 
@@ -32,7 +33,7 @@ A fork takes the shape unchanged, supplies its own `hosts.yml` and 1Password vau
 - **Komodo Core** is the single controller: web UI and API on `komodo_port`, MongoDB beside it, bound to localhost and fronted by a reverse proxy.
 - **Komodo Periphery** runs on every workload host, including the Core host when it also runs stacks.
   It runs in outbound mode and dials the public Core address, so hosts need no inbound port for Komodo.
-- **komodo-op** (optional) is a stack that syncs 1Password items into Komodo variables through 1Password Connect, so stacks can reference secrets without Ansible in the loop.
+- **komodo-op** is the bundled stack that syncs 1Password items into Komodo variables through 1Password Connect, so stacks can reference secrets without Ansible in the loop.
 - **Resource syncs** pull stack, procedure, and variable definitions from git repositories; the app stacks themselves live in a separate repository.
 
 ## Inventory groups
@@ -44,7 +45,7 @@ A fork takes the shape unchanged, supplies its own `hosts.yml` and 1Password vau
 | `komodo` | every managed host (`core` and `periphery` combined) | bootstrap (docker), baseline, verify |
 | `core` | exactly one Komodo Core host | bootstrap (core), upgrade |
 | `periphery` | every Periphery host | bootstrap (periphery), upgrade |
-| `proxmox` | optional, hypervisors touched only by the baseline's read-only checks | baseline, verify |
+| `proxmox` | optional hypervisors used by read-only checks and as guest-operation targets | baseline, verify, guest |
 
 Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
@@ -52,7 +53,9 @@ Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
 Seven roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (SSH access, security, firewall, reliability, DNS, and their read-only verification), and `proxmox_guest` (recurring LXC create, snapshot, and resize operations).
 
-Five playbooks compose them; each is idempotent and safe to re-run.
+Five playbooks compose them.
+The infrastructure reconciliation playbooks are designed to be idempotent and safe to re-run through their mutation gate.
+The guest playbook is an imperative operation and must be reviewed for its exact action and target every time.
 
 | Playbook | Effect | Mutates by default |
 | --- | --- | --- |
@@ -79,3 +82,10 @@ Five playbooks compose them; each is idempotent and safe to re-run.
 - **Core bound to localhost.** TLS, authentication, and rate limiting are the reverse proxy's job.
 - **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make upgrade` keeps the fleet aligned.
 - **Compose project name.** Stacks are named by `komodo_compose_project_name`, so manual `docker compose` calls need `-p` and `--env-file compose.env` to find them.
+
+## Operator guides
+
+- [1Password setup](1password.md) defines the vault, required items, and conditional items.
+- [Komodo API wrapper](komodo-cli.md) documents authenticated reads and explicitly authorized mutations.
+- [Proxmox guest operations](guests.md) documents the create, snapshot, and resize contracts.
+- [Scheduled maintenance](maintenance.md) documents local runs, timer installation, backends, and every `MAINT_*` variable.

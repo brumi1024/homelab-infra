@@ -41,6 +41,10 @@ input=$(cat)
 [[ "$input" == *"<evidence-bundle>"* ]]
 if [[ ${MAINT_FAKE_RESULT:-valid} == invalid ]]; then
     printf '%s\n' '{"type":"result","subtype":"success","total_cost_usd":0.01,"structured_output":{"status":"bad"}}'
+elif [[ ${MAINT_FAKE_RESULT:-valid} == malformed ]]; then
+    printf 'not json\n'
+elif [[ ${MAINT_FAKE_RESULT:-valid} == timeout ]]; then
+    sleep 5
 elif [[ ${MAINT_FAKE_RESULT:-valid} == over-budget ]]; then
     printf '%s\n' '{"type":"result","subtype":"success","total_cost_usd":0.51,"structured_output":{"status":"ok","summary":"test"}}'
 else
@@ -73,7 +77,9 @@ for argument in "$@"; do
 done
 [[ -r "$request_path" ]]
 jq -e '.messages[0].content | contains("<evidence-bundle>") and contains("<output-schema>")' "$request_path" >/dev/null
-if [[ ${MAINT_FAKE_RESULT:-valid} == invalid ]]; then
+if [[ ${MAINT_FAKE_RESULT:-valid} == timeout ]]; then
+    exit 28
+elif [[ ${MAINT_FAKE_RESULT:-valid} == invalid ]]; then
     content='not json'
 else
     content='{"status":"ok","summary":"test"}'
@@ -114,6 +120,21 @@ if printf '%s\n' 'synthetic evidence' | \
 fi
 
 if printf '%s\n' 'synthetic evidence' | \
+    MAINT_BACKEND=claude MAINT_CLAUDE_BIN="$fake_claude" MAINT_FAKE_RESULT=malformed \
+    MAINT_TIMEOUT_SECONDS=10 "$script" "$prompt" "$schema" >/dev/null 2>&1; then
+    printf 'malformed Claude output unexpectedly succeeded\n' >&2
+    exit 1
+fi
+
+if printf '%s\n' 'synthetic evidence' | \
+    MAINT_BACKEND=claude MAINT_CLAUDE_BIN="$fake_claude" MAINT_FAKE_RESULT=timeout \
+    MAINT_TIMEOUT_SECONDS=1 "$script" "$prompt" "$schema" > /dev/null 2> "$tmp_dir/claude-timeout.err"; then
+    printf 'timed-out Claude backend unexpectedly succeeded\n' >&2
+    exit 1
+fi
+grep -q 'claude backend exceeded 1s timeout' "$tmp_dir/claude-timeout.err"
+
+if printf '%s\n' 'synthetic evidence' | \
     MAINT_BACKEND=claude MAINT_CLAUDE_BIN="$fake_claude" MAINT_FAKE_RESULT=over-budget \
     MAINT_TIMEOUT_SECONDS=10 "$script" "$prompt" "$schema" >/dev/null 2>&1; then
     printf 'budget breach unexpectedly succeeded\n' >&2
@@ -126,5 +147,13 @@ if printf '%s\n' 'synthetic evidence' | \
     printf 'invalid OpenAI-compatible output unexpectedly succeeded\n' >&2
     exit 1
 fi
+
+if printf '%s\n' 'synthetic evidence' | \
+    MAINT_BACKEND=hermes MAINT_CURL_BIN="$fake_curl" MAINT_FAKE_RESULT=timeout \
+    MAINT_TIMEOUT_SECONDS=1 "$script" "$prompt" "$schema" > /dev/null 2> "$tmp_dir/hermes-timeout.err"; then
+    printf 'timed-out Hermes backend unexpectedly succeeded\n' >&2
+    exit 1
+fi
+grep -q 'hermes backend exceeded 1s timeout' "$tmp_dir/hermes-timeout.err"
 
 printf 'interpret harness tests passed\n'

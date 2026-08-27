@@ -22,9 +22,9 @@ Keep raw API output in a private temporary directory rather than committing it t
 
 ### Live verification status
 
-The behavior of the current Core when a stack declaration disappears from `komodo-app-stacks` is operator verification required.
+The behavior of the current Core when a stack declaration disappears from the configured app-stacks repository is operator verification required.
 
-This checkout could not authenticate to the Komodo Core because the local `op` CLI could not connect to the 1Password desktop app, so this runbook makes no claim that omission deletes the stack or leaves an orphaned stack resource.
+This generic runbook makes no universal claim that omission deletes the stack or leaves an orphaned stack resource.
 
 Do not infer the behavior from a different Komodo version, a different sync, or a documentation example.
 
@@ -71,7 +71,7 @@ Classify the observed result explicitly as one of these two outcomes.
 - `deleted`: the sync reports the removal and `GetStack` no longer returns the resource.
 - `orphaned`: the declaration is absent but `GetStack` still returns the resource, regardless of whether its runtime state is down.
 
-Do not mark this runbook's sync-semantics question complete until the result, Core version, sync name, and date are recorded in the operator's private evidence or the relevant notes vault entry.
+Do not mark this runbook's sync-semantics question complete until the result, Core version, sync name, and date are recorded in the operator's private evidence system.
 
 Restore the disposable declaration and run the sync again only after the operator has confirmed that the test data and test containers may be recreated.
 
@@ -308,10 +308,10 @@ Check Caddy's active configuration and logs for the removed route after the rest
 
 Check Uptime Kuma after AutoKuma's deletion grace period and check Homepage after its next reload.
 
-Record the final Core version, sync name, stack name, applied update status, data-retention decision, and any operator cleanup in the private evidence or the relevant notes vault entry.
+Record the final Core version, sync name, stack name, applied update status, data-retention decision, and any operator cleanup in the operator's private evidence system.
 
 ## Verification status for this runbook
 
 The repository-side checks for this document can run without live credentials.
 
-The Komodo sync deletion test and disposable-stack dry run remain unverified until the operator provides a working read-only 1Password or Komodo session and approves a disposable test.
+Every operator must verify the Komodo sync deletion test against the Core version and sync configuration they actually run before relying on the removal semantics.
