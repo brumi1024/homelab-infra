@@ -431,7 +431,7 @@
   tags: tailscale
 
 - name: Check failed system services  # noqa command-instead-of-module
-  ansible.builtin.command: systemctl --failed --no-legend
+  ansible.builtin.command: systemctl list-units --failed --no-legend --plain --type=service
   register: host_baseline_verify_failed_units
   changed_when: false
   failed_when: false
@@ -439,16 +439,42 @@
   when: inventory_hostname != 'localhost'
   tags: reliability
 
-- name: Record failed system services
+- name: Identify unexpected failed system services
+  ansible.builtin.set_fact:
+    host_baseline_verify_failed_unit_names: >-
+      {{ host_baseline_verify_failed_units.stdout_lines | map('split') | map('first') | list }}
+    host_baseline_verify_unexpected_failed_units: >-
+      {{
+        host_baseline_verify_failed_units.stdout_lines
+        | map('split')
+        | map('first')
+        | difference(homelab_verify_ignored_failed_system_units)
+        | list
+      }}
+  when: inventory_hostname != 'localhost'
+  tags: reliability
+
+- name: Report explicitly ignored failed system services
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} has investigated failed units explicitly ignored by inventory:
+      {{ host_baseline_verify_failed_unit_names | intersect(homelab_verify_ignored_failed_system_units) | join(', ') }}
+  when:
+    - inventory_hostname != 'localhost'
+    - host_baseline_verify_failed_unit_names | intersect(homelab_verify_ignored_failed_system_units) | length > 0
+  tags: reliability
+
+- name: Record unexpected failed system services
   ansible.builtin.set_fact:
     host_baseline_verify_failures: >-
       {{
         host_baseline_verify_failures
-        + [inventory_hostname ~ ' has failed units: ' ~ (host_baseline_verify_failed_units.stdout_lines | join(', '))]
+        + [inventory_hostname ~ ' has unexpected failed units: '
+           ~ (host_baseline_verify_unexpected_failed_units | join(', '))]
       }}
   when:
     - inventory_hostname != 'localhost'
-    - host_baseline_verify_failed_units.stdout_lines | length > 0
+    - host_baseline_verify_unexpected_failed_units | length > 0
   tags: reliability
 
 - name: Check unhealthy containers

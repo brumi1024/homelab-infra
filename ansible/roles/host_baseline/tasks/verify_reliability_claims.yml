@@ -49,7 +49,7 @@
   ansible.builtin.command:
     argv:
       - cat
-      - "/sys/class/net/{{ ansible_default_ipv4.interface }}/mtu"
+      - "/sys/class/net/{{ ansible_facts.default_ipv4.interface }}/mtu"
   register: host_baseline_verify_default_route_mtu_state
   changed_when: false
   check_mode: false

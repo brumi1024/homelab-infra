@@ -116,6 +116,9 @@ homelab_verify_required_paths: []
 homelab_verify_absent_fstab_mounts: []
 homelab_verify_gateway_mtu_clamp_enabled: false
 homelab_verify_gateway_mtu_clamp_lxc_targets: []
+# Keep known, investigated systemd failures explicit in operator inventory so
+# every other failed unit remains a verification failure.
+homelab_verify_ignored_failed_system_units: []
 
 # geerlingguy.security owns the generic Linux hardening. Keep these
 # explicit because the root SSH policy is intentionally less strict than
