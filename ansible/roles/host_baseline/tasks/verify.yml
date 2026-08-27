@@ -436,7 +436,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
-  when: inventory_hostname in groups['komodo']
+  when: inventory_hostname != 'localhost'
   tags: reliability
 
 - name: Record failed system services
@@ -447,7 +447,7 @@
         + [inventory_hostname ~ ' has failed units: ' ~ (host_baseline_verify_failed_units.stdout_lines | join(', '))]
       }}
   when:
-    - inventory_hostname in groups['komodo']
+    - inventory_hostname != 'localhost'
     - host_baseline_verify_failed_units.stdout_lines | length > 0
   tags: reliability
 
@@ -472,6 +472,20 @@
     - inventory_hostname in groups['komodo']
     - host_baseline_verify_unhealthy_containers.stdout_lines | length > 0
   tags: reliability
+
+- name: Verify inventory-selected reliability claims
+  ansible.builtin.include_tasks:
+    file: verify_reliability_claims.yml
+    apply:
+      tags: reliability
+  tags: reliability
+
+- name: Verify opt-in TCP BBR state
+  ansible.builtin.include_tasks:
+    file: verify_bbr.yml
+    apply:
+      tags: [reliability, bbr]
+  tags: [reliability, bbr]
 
 # --- dns --------------------------------------------------------------
 
@@ -520,6 +534,13 @@
     - inventory_hostname in groups['komodo']
     - homelab_host_dns_enabled | bool
     - host_baseline_verify_dns_public.rc != 0 or host_baseline_verify_dns_tailnet.rc != 0
+  tags: dns
+
+- name: Verify durable DNS ownership and Docker resolver state
+  ansible.builtin.include_tasks:
+    file: verify_dns_shape.yml
+    apply:
+      tags: dns
   tags: dns
 
 # --- komodo -------------------------------------------------------------

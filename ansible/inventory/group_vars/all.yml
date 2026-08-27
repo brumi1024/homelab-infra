@@ -105,6 +105,18 @@ homelab_reliability_tcp_bbr_mode: disabled
 # direct SSH into those containers.
 homelab_reliability_tcp_bbr_lxc_targets: []
 
+# Read-only assertions for important live state that is intentionally not
+# managed by host_baseline. Operator inventory opts hosts or groups into the
+# checks that describe their current role.
+homelab_verify_system_services: []
+homelab_verify_user: ""
+homelab_verify_user_services: []
+homelab_verify_default_route_mtu: null
+homelab_verify_required_paths: []
+homelab_verify_absent_fstab_mounts: []
+homelab_verify_gateway_mtu_clamp_enabled: false
+homelab_verify_gateway_mtu_clamp_lxc_targets: []
+
 # geerlingguy.security owns the generic Linux hardening. Keep these
 # explicit because the root SSH policy is intentionally less strict than
 # the role default: root key auth stays available for Ansible recovery.
