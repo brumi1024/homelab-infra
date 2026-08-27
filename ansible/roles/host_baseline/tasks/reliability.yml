@@ -66,3 +66,7 @@
   when:
     - homelab_swap_size_mb | int > 0
     - "'/swapfile' not in host_baseline_active_swap.stdout_lines"
+
+- name: Include opt-in TCP BBR tasks
+  ansible.builtin.include_tasks: bbr.yml
+  tags: [reliability, bbr]

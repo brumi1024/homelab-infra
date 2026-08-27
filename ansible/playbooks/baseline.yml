@@ -28,6 +28,12 @@
   become: true
   gather_facts: false
   tasks:
+    - name: Run opt-in TCP BBR reliability tasks
+      ansible.builtin.include_role:
+        name: host_baseline
+        tasks_from: bbr
+      tags: [reliability, bbr]
+
     - name: Run host_baseline verify checks
       ansible.builtin.include_role:
         name: host_baseline

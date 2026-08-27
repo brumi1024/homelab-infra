@@ -13,8 +13,8 @@
 # Where systemd-resolved runs, the durable shape is: /etc/resolv.conf is the
 # resolved stub, PVE is told not to rewrite it, and tailscaled programs only
 # the tailnet routing domain on tailscale0. Public names then follow whatever
-# DHCP gives eth0. Hosts without resolved (resolvconf on Debian cloud images,
-# direct mode on bare metal) are left as they are and only verified.
+# DHCP gives eth0. A Tailscale host with dhclient but without resolved instead
+# gets an enter hook that leaves Tailscale's resolv.conf ownership intact.
 - name: Detect systemd-resolved
   ansible.builtin.systemd:
     name: systemd-resolved.service
@@ -30,6 +30,56 @@
         and host_baseline_dns_resolved.status is defined
         and host_baseline_dns_resolved.status.ActiveState | default('') == 'active'
       }}
+
+- name: Detect Tailscale service state for direct resolver ownership
+  ansible.builtin.systemd:
+    name: tailscaled.service
+  register: host_baseline_dns_tailscaled
+  failed_when: false
+  when: homelab_host_dns_enabled | bool
+
+- name: Detect dhclient paths
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /sbin/dhclient
+    - /usr/sbin/dhclient
+  register: host_baseline_dns_dhclient_paths
+  when: homelab_host_dns_enabled | bool
+
+- name: Decide whether dhclient needs a Tailscale resolver guard
+  ansible.builtin.set_fact:
+    host_baseline_dns_use_dhclient_hook: >-
+      {{
+        homelab_host_dns_enabled | bool
+        and not host_baseline_dns_use_resolved | bool
+        and host_baseline_dns_tailscaled.status is defined
+        and host_baseline_dns_tailscaled.status.ActiveState | default('') == 'active'
+        and host_baseline_dns_dhclient_paths.results
+          | selectattr('stat.exists', 'equalto', true)
+          | list
+          | length > 0
+      }}
+
+- name: Keep dhclient from replacing Tailscale resolver state
+  ansible.builtin.copy:
+    dest: /etc/dhcp/dhclient-enter-hooks.d/zz-tailscale-resolv-conf
+    content: |
+      #!/bin/sh
+      ## Sourced, not exec'ed, by dhclient-script.
+      #
+      # tailscaled owns /etc/resolv.conf on this host: it is the only resolver that
+      # answers MagicDNS names, and Komodo Periphery dials Core by its tailnet name.
+      # dhclient rewrote the file on every lease renewal and tailscaled lost the
+      # fight, leaving the host unable to resolve any tailnet name.
+      # systemd-resolved is not installed here, so dhclient-enter-hooks.d/resolved-enter
+      # never disables make_resolv_conf() and this hook has to.
+
+      make_resolv_conf() { : ; }
+    owner: root
+    group: root
+    mode: "0644"
+  when: host_baseline_dns_use_dhclient_hook | bool
 
 - name: Stop Proxmox rewriting resolv.conf at container start
   ansible.builtin.file:
