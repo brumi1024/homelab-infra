@@ -83,3 +83,17 @@ all:
         pve-1:
           ansible_host: "pve-1"
           node_site: main
+
+    # Optional. Proxmox hosts that own a ZFS data pool: ARC sizing, sanoid
+    # snapshot/prune, and pool property checks.
+    zfs_hosts:
+      hosts:
+        pve-1:
+          zfs_host_pools:
+            - blackbox
+          zfs_host_sanoid_datasets:
+            - dataset: blackbox
+              recursive: yes
+              use_template: [default]
+            - dataset: blackbox/media
+              daily: 14

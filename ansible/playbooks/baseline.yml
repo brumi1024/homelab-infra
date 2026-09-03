@@ -23,6 +23,13 @@
         tasks_from: tailscale_ssh
       tags: [ssh_access, tailscale]
 
+- name: Apply the ZFS host baseline
+  hosts: zfs_hosts
+  become: true
+  gather_facts: true
+  roles:
+    - role: zfs_host
+
 - name: Verify the Proxmox baseline
   hosts: proxmox
   become: true

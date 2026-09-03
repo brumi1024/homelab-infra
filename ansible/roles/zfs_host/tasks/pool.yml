@@ -1,0 +1,55 @@
+---
+# Import and export stay a supervised, live step; this only touches
+# properties of pools that are already imported, and never runs zpool upgrade.
+- name: List imported ZFS pools
+  ansible.builtin.command: zpool list -H -o name
+  register: zfs_host_imported_pools
+  changed_when: false
+  check_mode: false
+  tags: zfs
+
+- name: Read the current pool compatibility property
+  ansible.builtin.command: zpool get -H -o value compatibility {{ item }}
+  loop: "{{ zfs_host_pools }}"
+  loop_control:
+    label: "{{ item }}"
+  register: zfs_host_pool_compat_current
+  changed_when: false
+  check_mode: false
+  when:
+    - zfs_host_pool_compatibility | length > 0
+    - item in zfs_host_imported_pools.stdout_lines
+  tags: zfs
+
+- name: Set pool compatibility where it differs
+  ansible.builtin.command: zpool set compatibility={{ zfs_host_pool_compatibility }} {{ item.item }}
+  loop: "{{ zfs_host_pool_compat_current.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not item.skipped | default(false)
+    - item.stdout | trim != zfs_host_pool_compatibility
+  changed_when: true
+  tags: zfs
+
+- name: Read the current pool cachefile property
+  ansible.builtin.command: zpool get -H -o value cachefile {{ item }}
+  loop: "{{ zfs_host_pools }}"
+  loop_control:
+    label: "{{ item }}"
+  register: zfs_host_pool_cachefile_current
+  changed_when: false
+  check_mode: false
+  when: item in zfs_host_imported_pools.stdout_lines
+  tags: zfs
+
+- name: Set the pool cachefile where it differs
+  ansible.builtin.command: zpool set cachefile=/etc/zfs/zpool.cache {{ item.item }}
+  loop: "{{ zfs_host_pool_cachefile_current.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - not item.skipped | default(false)
+    - item.stdout | trim != '/etc/zfs/zpool.cache'
+  changed_when: true
+  tags: zfs

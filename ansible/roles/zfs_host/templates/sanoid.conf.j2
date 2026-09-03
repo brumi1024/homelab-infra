@@ -1,0 +1,25 @@
+{% for name, settings in zfs_host_sanoid_templates.items() %}
+[template_{{ name }}]
+{% for key, value in settings.items() %}
+    {{ key }} = {{ value }}
+{% endfor %}
+
+{% endfor %}
+{% for dataset in zfs_host_sanoid_datasets %}
+[{{ dataset.dataset }}]
+{% if dataset.use_template is defined %}
+    use_template = {{ dataset.use_template | join(',') }}
+{% endif %}
+{% if dataset.recursive is defined %}
+    recursive = {{ dataset.recursive }}
+{% endif %}
+{% if dataset.process_children_only is defined %}
+    process_children_only = {{ dataset.process_children_only }}
+{% endif %}
+{% for key in ['frequently', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'autosnap', 'autoprune'] %}
+{% if dataset[key] is defined %}
+    {{ key }} = {{ dataset[key] }}
+{% endif %}
+{% endfor %}
+
+{% endfor %}

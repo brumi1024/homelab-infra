@@ -14,6 +14,17 @@
         tasks_from: verify
       tags: always
 
+- name: Verify the ZFS host baseline
+  hosts: "zfs_hosts:!{{ lookup('ansible.builtin.pipe', 'hostname -s') }}"
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Run zfs_host verify checks
+      ansible.builtin.include_role:
+        name: zfs_host
+        tasks_from: verify
+      tags: always
+
 - name: Verify Komodo Core sees every Periphery node
   hosts: localhost
   gather_facts: false

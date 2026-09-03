@@ -1,0 +1,37 @@
+---
+- name: Configure the ZFS ARC max modprobe option
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/zfs.conf
+    content: |
+      options zfs zfs_arc_max={{ zfs_host_arc_max_bytes }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Regenerate initramfs for zfs_host
+  tags: zfs
+
+- name: Read the runtime ZFS ARC max
+  ansible.builtin.slurp:
+    path: /sys/module/zfs/parameters/zfs_arc_max
+  register: zfs_host_arc_runtime
+  check_mode: false
+  tags: zfs
+
+- name: Report a pending runtime ZFS ARC max change
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} currently reports zfs_arc_max={{ zfs_host_arc_runtime.content | b64decode | trim }}
+      and would be set to {{ zfs_host_arc_max_bytes }}.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - (zfs_host_arc_runtime.content | b64decode | trim | int) != zfs_host_arc_max_bytes
+  tags: zfs
+
+- name: Apply the ZFS ARC max at runtime
+  ansible.builtin.shell: echo {{ zfs_host_arc_max_bytes }} > /sys/module/zfs/parameters/zfs_arc_max
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - (zfs_host_arc_runtime.content | b64decode | trim | int) != zfs_host_arc_max_bytes
+  tags: zfs

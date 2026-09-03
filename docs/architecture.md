@@ -46,12 +46,13 @@ No deployment state or secret needs to enter a committed file.
 | `core` | exactly one Komodo Core host | bootstrap (core), upgrade |
 | `periphery` | every Periphery host | bootstrap (periphery), upgrade |
 | `proxmox` | optional hypervisors used by read-only checks and as guest-operation targets | baseline, verify, guest |
+| `zfs_hosts` | optional Proxmox hosts that own a ZFS data pool | baseline, verify |
 
 Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
 ## Roles and playbooks
 
-Seven roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (SSH access, security, firewall, reliability, DNS, and their read-only verification), and `proxmox_guest` (recurring LXC create, snapshot, and resize operations).
+Eight roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (SSH access, security, firewall, reliability, DNS, and their read-only verification), `proxmox_guest` (recurring LXC create, snapshot, and resize operations), and `zfs_host` (ARC sizing, sanoid snapshot/prune, and pool property checks on Proxmox hosts that own a ZFS data pool).
 
 Five playbooks compose them.
 The infrastructure reconciliation playbooks are designed to be idempotent and safe to re-run through their mutation gate.
@@ -60,7 +61,7 @@ The guest playbook is an imperative operation and must be reviewed for its exact
 | Playbook | Effect | Mutates by default |
 | --- | --- | --- |
 | `bootstrap.yml` | Docker on `komodo`, Core on `core`, auth on `localhost`, Core again to pick up the new API key, Periphery on `periphery`, GitOps on `localhost` | yes, `APPLY=1` required |
-| `baseline.yml` | applies `host_baseline` on `komodo`, applies only SSH access tasks to other `ssh_access` hosts, and verifies Proxmox | yes, `APPLY=1` required |
+| `baseline.yml` | applies `host_baseline` on `komodo`, applies only SSH access tasks to other `ssh_access` hosts, applies `zfs_host` on `zfs_hosts`, and verifies Proxmox | yes, `APPLY=1` required |
 | `verify.yml` | every read-only check, including explicitly managed SSH access | no |
 | `upgrade.yml` | Core with a fresh image pull, then Periphery tracking `komodo_periphery_version` | yes, `APPLY=1` required |
 | `guest.yml` | create or snapshot an LXC through the Proxmox API, or resize its rootfs through `pct` over SSH | yes, `APPLY=1` required |
@@ -71,6 +72,13 @@ The guest playbook is an imperative operation and must be reviewed for its exact
 2. Ansible reads them at run time with `community.general.onepassword` lookups; nothing is written to disk on the operator machine.
 3. Rendered files on hosts (`compose.env`, `core.config.toml`) contain the values, protected by file mode and the host firewall.
 4. `komodo_auth` writes the API key it creates back into the same vault, so later runs and `komodo_gitops` read one source.
+
+## Storage
+
+`zfs_host` covers the Proxmox side of a ZFS data pool: ARC sizing through `/etc/modprobe.d` and the live kernel parameter, sanoid for policy-driven snapshot and prune, and a couple of pool properties (`compatibility`, `cachefile`).
+Sanoid ships as a Debian package, but this repository builds it from a pinned upstream git tag instead, because the package can lag or go unmaintained on a given release; `zfs_host_sanoid_version` is the one place that pin lives.
+Snapshot retention per dataset is declared in inventory (`zfs_host_sanoid_datasets`), templated into `sanoid.conf`, and enforced by `sanoid.timer` rather than cron.
+Pool import and export stay a supervised, live step outside this role: `zfs_host` only reconciles properties on pools that are already imported, and it never runs `zpool upgrade`, since that is a one-way change with no supported rollback.
 
 ## Design choices worth knowing
 
