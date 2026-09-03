@@ -1,0 +1,8 @@
+---
+- name: Regenerate initramfs for zfs_host
+  ansible.builtin.command: update-initramfs -u
+  changed_when: true
+
+- name: Reload systemd for zfs_host
+  ansible.builtin.systemd:
+    daemon_reload: true

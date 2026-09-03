@@ -1,0 +1,25 @@
+---
+# 16 GiB. Raise on hosts with more memory pressure from other services.
+zfs_host_arc_max_bytes: 17179869184
+
+# The Debian package was orphaned 2026-08-31; build the pinned upstream tag.
+zfs_host_sanoid_version: "v2.3.0"
+
+zfs_host_pools: []
+# Applied only to pools already imported; never runs zpool upgrade.
+zfs_host_pool_compatibility: "openzfs-2.3"
+
+zfs_host_sanoid_templates:
+  default:
+    # Quoted: sanoid.conf.j2 needs a literal yes/no string, not a YAML/Jinja
+    # boolean, to hand sanoid its own documented syntax.
+    autosnap: "yes"
+    autoprune: "yes"
+    frequently: 0
+    hourly: 48
+    daily: 30
+    weekly: 0
+    monthly: 6
+    yearly: 0
+
+zfs_host_sanoid_datasets: []

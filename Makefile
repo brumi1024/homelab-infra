@@ -56,7 +56,7 @@ maint-test: ## Shellcheck and run the hermetic scheduled-maintenance tests
 ping: ## Check connectivity to all hosts
 	@cd ansible && $(VENV_BIN)/ansible all $(ANSIBLE_OPTS) $(EXTRA_VARS) -m ping
 
-verify: ## Run every read-only check (TAGS=security|reliability|tailscale|ssh_access|break_glass|dns|komodo|proxmox, LIMIT=host)
+verify: ## Run every read-only check (TAGS=security|reliability|tailscale|ssh_access|break_glass|dns|komodo|proxmox|zfs, LIMIT=host)
 	@cd ansible && $(VENV_BIN)/ansible-playbook $(ANSIBLE_OPTS) $(EXTRA_VARS) $(LIMIT_OPTS) $(TAGS_OPTS) playbooks/verify.yml
 
 bootstrap: ## Install Docker, Core, auth, Periphery, and GitOps. APPLY=1 to mutate, otherwise --check --diff

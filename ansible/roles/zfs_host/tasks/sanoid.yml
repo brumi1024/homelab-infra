@@ -1,0 +1,93 @@
+---
+- name: Install git for the sanoid source checkout
+  ansible.builtin.apt:
+    name: git
+    state: present
+  tags: zfs
+
+- name: Install sanoid's perl dependencies
+  ansible.builtin.apt:
+    name:
+      - libcapture-tiny-perl
+      - libconfig-inifiles-perl
+    state: present
+  tags: zfs
+
+# The Debian package was orphaned 2026-08-31 and Debian 13 ships 2.2.0;
+# the pinned upstream tag keeps sanoid current without a third-party repo.
+- name: Check out the sanoid source at the pinned tag
+  ansible.builtin.git:
+    repo: https://github.com/jimsalterjrs/sanoid.git
+    dest: "/usr/local/src/sanoid-{{ zfs_host_sanoid_version }}"
+    version: "{{ zfs_host_sanoid_version }}"
+    depth: 1
+  tags: zfs
+
+- name: Install sanoid, syncoid, and findoid
+  ansible.builtin.copy:
+    src: "/usr/local/src/sanoid-{{ zfs_host_sanoid_version }}/{{ item }}"
+    dest: "/usr/local/sbin/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - sanoid
+    - syncoid
+    - findoid
+  tags: zfs
+
+- name: Ensure /etc/sanoid exists
+  ansible.builtin.file:
+    path: /etc/sanoid
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: zfs
+
+- name: Install the upstream sanoid defaults
+  ansible.builtin.copy:
+    src: "/usr/local/src/sanoid-{{ zfs_host_sanoid_version }}/sanoid.defaults.conf"
+    dest: /etc/sanoid/sanoid.defaults.conf
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  tags: zfs
+
+- name: Template sanoid.conf from the configured datasets
+  ansible.builtin.template:
+    src: sanoid.conf.j2
+    dest: /etc/sanoid/sanoid.conf
+    owner: root
+    group: root
+    mode: "0644"
+  tags: zfs
+
+# Adjusted from packages/debian/sanoid*.service and sanoid.timer upstream:
+# ExecStart points at /usr/local/sbin since the Debian package is not used.
+- name: Install sanoid systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - sanoid.service
+    - sanoid.timer
+    - sanoid-prune.service
+  notify: Reload systemd for zfs_host
+  tags: zfs
+
+- name: Apply systemd unit changes before enabling the timer
+  ansible.builtin.meta: flush_handlers
+  tags: zfs
+
+- name: Enable and start sanoid.timer
+  ansible.builtin.systemd:
+    name: sanoid.timer
+    enabled: true
+    state: started
+  tags: zfs

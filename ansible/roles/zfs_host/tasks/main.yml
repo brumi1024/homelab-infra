@@ -1,0 +1,12 @@
+---
+- name: Include ARC tuning tasks
+  ansible.builtin.include_tasks: arc.yml
+  tags: zfs
+
+- name: Include sanoid tasks
+  ansible.builtin.include_tasks: sanoid.yml
+  tags: zfs
+
+- name: Include pool property tasks
+  ansible.builtin.include_tasks: pool.yml
+  tags: zfs

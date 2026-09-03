@@ -1,0 +1,143 @@
+---
+- name: Start with a clean zfs_host verification failure list
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: []
+  tags: always
+
+- name: Check ZFS pool health
+  ansible.builtin.command: zpool status -x {{ item }}
+  loop: "{{ zfs_host_pools }}"
+  loop_control:
+    label: "{{ item }}"
+  register: zfs_host_verify_pool_health
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: zfs
+
+- name: Record a ZFS pool that is not ONLINE with zero errors
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: >-
+      {{
+        zfs_host_verify_failures
+        + [inventory_hostname ~ ' ZFS pool ' ~ item.item ~ ' is not ONLINE with zero errors: ' ~ (item.stdout | trim)]
+      }}
+  loop: "{{ zfs_host_verify_pool_health.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc != 0 or 'is healthy' not in item.stdout
+  tags: zfs
+
+- name: Read the pool compatibility property
+  ansible.builtin.command: zpool get -H -o value compatibility {{ item }}
+  loop: "{{ zfs_host_pools }}"
+  loop_control:
+    label: "{{ item }}"
+  register: zfs_host_verify_pool_compat
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: zfs_host_pool_compatibility | length > 0
+  tags: zfs
+
+- name: Record a pool compatibility mismatch
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: >-
+      {{
+        zfs_host_verify_failures
+        + [inventory_hostname ~ ' ZFS pool ' ~ item.item ~ ' compatibility is ' ~ (item.stdout | trim) ~ ', expected ' ~ zfs_host_pool_compatibility ~ '.']
+      }}
+  loop: "{{ zfs_host_verify_pool_compat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - zfs_host_pool_compatibility | length > 0
+    - item.rc != 0 or item.stdout | trim != zfs_host_pool_compatibility
+  tags: zfs
+
+- name: Read the runtime ZFS ARC max
+  ansible.builtin.slurp:
+    path: /sys/module/zfs/parameters/zfs_arc_max
+  register: zfs_host_verify_arc_max
+  tags: zfs
+
+- name: Record a runtime ZFS ARC max mismatch
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: >-
+      {{
+        zfs_host_verify_failures
+        + [
+            inventory_hostname ~ ' runtime zfs_arc_max is '
+            ~ (zfs_host_verify_arc_max.content | b64decode | trim)
+            ~ ', expected ' ~ (zfs_host_arc_max_bytes | string) ~ '.'
+          ]
+      }}
+  when: (zfs_host_verify_arc_max.content | b64decode | trim | int) != zfs_host_arc_max_bytes
+  tags: zfs
+
+- name: Check sanoid.timer state
+  ansible.builtin.systemd:
+    name: sanoid.timer
+  register: zfs_host_verify_sanoid_timer
+  changed_when: false
+  tags: zfs
+
+- name: Record sanoid.timer not active
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: "{{ zfs_host_verify_failures + [inventory_hostname ~ ' sanoid.timer is not active.'] }}"
+  when: zfs_host_verify_sanoid_timer.status.ActiveState | default('') != 'active'
+  tags: zfs
+
+- name: Read the newest hourly autosnap snapshot per configured dataset
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    zfs list -H -p -o name,creation -t snapshot {{ item.dataset }}
+    | awk -F'\t' '$1 ~ /@autosnap_[a-z]+_hourly$/ {print $2}'
+    | sort -rn
+    | head -n1
+  args:
+    executable: /bin/bash
+  loop: "{{ zfs_host_sanoid_datasets }}"
+  loop_control:
+    label: "{{ item.dataset }}"
+  register: zfs_host_verify_hourly_snapshot
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: zfs
+
+- name: Record a missing or stale hourly autosnap snapshot
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: >-
+      {{
+        zfs_host_verify_failures
+        + [inventory_hostname ~ ' has no hourly autosnap snapshot on ' ~ item.item.dataset ~ ' younger than 2 hours.']
+      }}
+  loop: "{{ zfs_host_verify_hourly_snapshot.results }}"
+  loop_control:
+    label: "{{ item.item.dataset }}"
+  when: >-
+    item.stdout | trim | length == 0
+    or (ansible_date_time.epoch | int - (item.stdout | trim | int)) > 7200
+  tags: zfs
+
+- name: Check zfs-import-scan.service state
+  ansible.builtin.systemd:
+    name: zfs-import-scan.service
+  register: zfs_host_verify_import_scan
+  failed_when: false
+  changed_when: false
+  tags: zfs
+
+- name: Record a failed zfs-import-scan.service
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: "{{ zfs_host_verify_failures + [inventory_hostname ~ ' zfs-import-scan.service has failed.'] }}"
+  when: zfs_host_verify_import_scan.status.ActiveState | default('') == 'failed'
+  tags: zfs
+
+- name: Require every zfs_host verification check to have passed
+  ansible.builtin.assert:
+    that:
+      - zfs_host_verify_failures | length == 0
+    fail_msg: "{{ zfs_host_verify_failures }}"
+  tags: always
