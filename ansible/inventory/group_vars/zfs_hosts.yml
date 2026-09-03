@@ -11,8 +11,10 @@ zfs_host_pool_compatibility: "openzfs-2.3"
 
 zfs_host_sanoid_templates:
   default:
-    autosnap: yes
-    autoprune: yes
+    # Quoted: sanoid.conf.j2 needs a literal yes/no string, not a YAML/Jinja
+    # boolean, to hand sanoid its own documented syntax.
+    autosnap: "yes"
+    autoprune: "yes"
     frequently: 0
     hourly: 48
     daily: 30

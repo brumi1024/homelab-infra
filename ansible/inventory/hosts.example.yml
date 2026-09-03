@@ -93,7 +93,7 @@ all:
             - blackbox
           zfs_host_sanoid_datasets:
             - dataset: blackbox
-              recursive: yes
+              recursive: "yes"
               use_template: [default]
             - dataset: blackbox/media
               daily: 14
