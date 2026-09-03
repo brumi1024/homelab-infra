@@ -7,13 +7,17 @@ file_server_smb_conf_path: /etc/samba/smb.conf
 #  shadow_copies, comment}
 file_server_shares: []
 
-# Unix and Samba accounts. {name, uid, groups, op_item (defaults to name)}
+# Groups with a fixed gid, created before any user references them. {name, gid}
+file_server_groups: []
+# Unix and Samba accounts. {name, uid, group (primary, must be in
+# file_server_groups), groups (secondary, created if not already declared),
+# op_item (defaults to name)}
 file_server_users: []
 # Set true to force smbpasswd to re-run for every user on the next apply.
 file_server_force_password_reset: false
 
-# Rsync push jobs. {name, source, target_host, target_path, on_calendar,
-# delete (default true), ping_url (optional)}
+# Rsync push jobs. {name, source, target_host, target_user (default root),
+# target_path, on_calendar, delete (default true), ping_url (optional)}
 file_server_rsync_jobs: []
 file_server_rsync_ssh_key_item: "File Server Rsync SSH Key"
 # known_hosts lines for every target_host referenced above.

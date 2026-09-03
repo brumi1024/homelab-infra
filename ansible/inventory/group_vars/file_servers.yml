@@ -32,28 +32,38 @@ file_server_shares:
     valid_users: [alice, bob]
     comment: "Application data, no shadow copies"
 
+# media is root-owned on disk at mode 0775; membership in its fixed gid is
+# what lets Samba users write into it, not user ownership.
+file_server_groups:
+  - name: media
+    gid: 1001
+
 file_server_users:
   - name: alice
-    uid: 1001
+    uid: 1000
+    group: media
     groups: [smbusers]
   - name: bob
     uid: 1002
-    groups: [smbusers]
+    groups: [smbusers, media]
 
 file_server_rsync_jobs:
   - name: photos
     source: /mnt/blackbox/photos/
     target_host: nas-remote
+    target_user: backup   # e.g. a Synology account, not root
     target_path: /backup/photos/
     on_calendar: "*-*-* 01:00:00"
   - name: documents
     source: /mnt/blackbox/documents/
     target_host: nas-remote
+    target_user: backup
     target_path: /backup/documents/
     on_calendar: "*-*-* 01:30:00"
   - name: appdata
     source: /mnt/blackbox/appdata/
     target_host: nas-remote
+    target_user: backup
     target_path: /backup/appdata/
     on_calendar: "*-*-* 02:00:00"
 

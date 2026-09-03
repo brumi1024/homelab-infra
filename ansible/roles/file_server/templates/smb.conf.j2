@@ -9,7 +9,7 @@
    printcap name = /dev/null
    disable spoolss = yes
 
-   # macOS client compatibility (AFP-style resource forks, extended attributes).
+   # macOS client compatibility: resource forks, extended attributes.
    vfs objects = catia fruit streams_xattr
    fruit:metadata = stream
    fruit:model = MacSamba
@@ -38,10 +38,7 @@
 {% endif %}
 {% if share.shadow_copies | default(false) %}
    vfs objects = catia fruit streams_xattr shadow_copy2
-   # Sanoid names snapshots autosnap_YYYY-MM-DD_HH:MM:SS_<period>; the
-   # trailing period suffix is ignored because shadow:format only needs to
-   # match a leading prefix of the directory name. See vfs_shadow_copy2(8)
-   # and https://devblog.yvn.no/posts/samba-and-windows-shadow-copies/.
+   # Matches sanoid's autosnap_YYYY-MM-DD_HH:MM:SS_<period> naming, see the PR description for the citation.
    shadow:snapdir = .zfs/snapshot
    shadow:sort = desc
    shadow:format = _%Y-%m-%d_%H:%M:%S

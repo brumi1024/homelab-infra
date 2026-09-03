@@ -1,8 +1,20 @@
 ---
+- name: Ensure declared file server groups exist with fixed gids
+  ansible.builtin.group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid }}"
+    state: present
+  loop: "{{ file_server_groups }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Determine secondary groups referenced by file server users
   ansible.builtin.set_fact:
     file_server_secondary_groups: >-
-      {{ file_server_users | map(attribute='groups', default=[]) | sum(start=[]) | unique }}
+      {{
+        (file_server_users | map(attribute='groups', default=[]) | sum(start=[]) | unique)
+        | difference(file_server_groups | map(attribute='name') | list)
+      }}
 
 - name: Ensure secondary groups exist
   ansible.builtin.group:
@@ -14,6 +26,7 @@
   ansible.builtin.user:
     name: "{{ item.name }}"
     uid: "{{ item.uid }}"
+    group: "{{ item.group | default(omit) }}"
     groups: "{{ item.groups | default([]) }}"
     append: true
     shell: /usr/sbin/nologin
