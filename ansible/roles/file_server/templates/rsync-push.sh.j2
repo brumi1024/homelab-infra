@@ -1,0 +1,19 @@
+#!/bin/sh
+# Rsync push job: {{ job.name }}
+set -eu
+
+SSH_KEY=/root/.ssh/id_rsync
+KNOWN_HOSTS=/root/.ssh/known_hosts
+SOURCE="{{ job.source }}"
+TARGET="{{ job.target_host }}:{{ job.target_path }}"
+
+if rsync -aH{{ ' --delete' if job.delete | default(true) | bool else '' }} --numeric-ids \
+    -e "ssh -i $SSH_KEY -o UserKnownHostsFile=$KNOWN_HOSTS" \
+    "$SOURCE" "$TARGET"; then
+{% if job.ping_url is defined and job.ping_url %}
+  curl -fsS "{{ job.ping_url }}" >/dev/null 2>&1 || true
+{% endif %}
+  exit 0
+fi
+
+exit 1

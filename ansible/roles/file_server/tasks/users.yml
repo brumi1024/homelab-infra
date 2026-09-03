@@ -1,0 +1,65 @@
+---
+- name: Determine secondary groups referenced by file server users
+  ansible.builtin.set_fact:
+    file_server_secondary_groups: >-
+      {{ file_server_users | map(attribute='groups', default=[]) | sum(start=[]) | unique }}
+
+- name: Ensure secondary groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ file_server_secondary_groups }}"
+
+- name: Ensure file server Unix users exist with fixed uids
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    uid: "{{ item.uid }}"
+    groups: "{{ item.groups | default([]) }}"
+    append: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  loop: "{{ file_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: List existing Samba accounts
+  ansible.builtin.command: pdbedit -L
+  register: file_server_pdbedit
+  changed_when: false
+  check_mode: false
+
+- name: Look up each user's Samba password
+  ansible.builtin.set_fact:
+    file_server_smb_passwords: >-
+      {{
+        file_server_smb_passwords | default({})
+        | combine({
+            item.name: lookup(
+              'community.general.onepassword',
+              item.op_item | default(item.name),
+              field='password',
+              vault=homelab_op_vault
+            )
+          })
+      }}
+  loop: "{{ file_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Set Samba passwords for users missing a Samba account or on forced reset
+  ansible.builtin.command:
+    argv:
+      - smbpasswd
+      - -s
+      - -a
+      - "{{ item.name }}"
+    stdin: "{{ file_server_smb_passwords[item.name] }}\n{{ file_server_smb_passwords[item.name] }}\n"
+  loop: "{{ file_server_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: >-
+    item.name not in (file_server_pdbedit.stdout_lines | map('split', ':') | map('first') | list)
+    or file_server_force_password_reset | bool
+  no_log: true
+  changed_when: true

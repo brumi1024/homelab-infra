@@ -47,12 +47,13 @@ No deployment state or secret needs to enter a committed file.
 | `periphery` | every Periphery host | bootstrap (periphery), upgrade |
 | `proxmox` | optional hypervisors used by read-only checks and as guest-operation targets | baseline, verify, guest |
 | `zfs_hosts` | optional Proxmox hosts that own a ZFS data pool | baseline, verify |
+| `file_servers` | optional unprivileged LXCs running Samba, rsync push jobs, and Cockpit | baseline, verify |
 
 Group defaults live in `group_vars/`; per-host overrides go in `hosts.yml`.
 
 ## Roles and playbooks
 
-Eight roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (SSH access, security, firewall, reliability, DNS, and their read-only verification), `proxmox_guest` (recurring LXC create, snapshot, and resize operations), and `zfs_host` (ARC sizing, sanoid snapshot/prune, and pool property checks on Proxmox hosts that own a ZFS data pool).
+Nine roles, each one concern: `docker` (Docker Engine and daemon options), `komodo_core` (the Core compose stack and its config), `komodo_api` (the single Komodo API call mechanism every other role uses), `komodo_auth` (admin login, service user, API key), `komodo_gitops` (resource syncs and the komodo-op stack), `host_baseline` (SSH access, security, firewall, reliability, DNS, and their read-only verification), `proxmox_guest` (recurring LXC create, snapshot, and resize operations), `zfs_host` (ARC sizing, sanoid snapshot/prune, and pool property checks on Proxmox hosts that own a ZFS data pool), and `file_server` (Samba shares, rsync push jobs, and Cockpit on a file-serving LXC).
 
 Five playbooks compose them.
 The infrastructure reconciliation playbooks are designed to be idempotent and safe to re-run through their mutation gate.
@@ -61,7 +62,7 @@ The guest playbook is an imperative operation and must be reviewed for its exact
 | Playbook | Effect | Mutates by default |
 | --- | --- | --- |
 | `bootstrap.yml` | Docker on `komodo`, Core on `core`, auth on `localhost`, Core again to pick up the new API key, Periphery on `periphery`, GitOps on `localhost` | yes, `APPLY=1` required |
-| `baseline.yml` | applies `host_baseline` on `komodo`, applies only SSH access tasks to other `ssh_access` hosts, applies `zfs_host` on `zfs_hosts`, and verifies Proxmox | yes, `APPLY=1` required |
+| `baseline.yml` | applies `host_baseline` on `komodo`, applies only SSH access tasks to other `ssh_access` hosts, applies `zfs_host` on `zfs_hosts`, applies `file_server` on `file_servers`, and verifies Proxmox | yes, `APPLY=1` required |
 | `verify.yml` | every read-only check, including explicitly managed SSH access | no |
 | `upgrade.yml` | Core with a fresh image pull, then Periphery tracking `komodo_periphery_version` | yes, `APPLY=1` required |
 | `guest.yml` | create or snapshot an LXC through the Proxmox API, or resize its rootfs through `pct` over SSH | yes, `APPLY=1` required |
@@ -90,6 +91,18 @@ Pool import and export stay a supervised, live step outside this role: `zfs_host
 - **Core bound to localhost.** TLS, authentication, and rate limiting are the reverse proxy's job.
 - **Version coupling.** `komodo_periphery_version: "core"` follows the version Core reports, so a Core bump plus `make upgrade` keeps the fleet aligned.
 - **Compose project name.** Stacks are named by `komodo_compose_project_name`, so manual `docker compose` calls need `-p` and `--env-file compose.env` to find them.
+
+## File serving
+
+`file_server` targets an unprivileged Debian LXC that replaces a general-purpose NAS VM's SMB shares and nightly backup pushes.
+The operator creates the container out of band with the community-scripts Cockpit LXC installer, which installs Cockpit and the 45Drives `cockpit-file-sharing`, `cockpit-navigator`, and `cockpit-identities` plugins; the role is idempotent on top of that installer rather than replacing it.
+Proxmox bind-mounts ZFS datasets into the container; the role manages Samba, Unix accounts, and rsync jobs, not the mounts themselves.
+
+- **Shares are declarative.** `file_server_shares` renders one `smb.conf` stanza per entry, with macOS-friendly `vfs objects = catia fruit streams_xattr` globally and per-share Time Machine or shadow-copy options layered on top.
+- **Shadow copies read ZFS snapshots directly.** Snapshots come from sanoid on the Proxmox host and surface inside the bind mount under `.zfs/snapshot` when the dataset has `snapdir=visible`; `vfs_shadow_copy2`'s `shadow:format`, `shadow:snapprefix`, and `shadow:delimiter` are tuned to sanoid's `autosnap_<timestamp>_<period>` naming, since the module only needs a matching prefix and ignores the trailing period suffix.
+- **Users get fixed uids.** `file_server_users` creates Unix accounts at the uids the ZFS datasets already expect, so a Proxmox `lxc.idmap` mapping those uids straight through gives the container real ownership without touching the host's own uid range.
+- **Rsync jobs are systemd timers, not cron.** Each `file_server_rsync_jobs` entry gets its own oneshot service, timer, and wrapper script under `/usr/local/sbin`; the wrapper pings an optional Uptime Kuma push monitor on success and exits non-zero on failure so `systemctl --failed` and `verify.yml` both see it.
+- **One SSH identity for every push.** All rsync jobs share `/root/.ssh/id_rsync`, sourced from 1Password, with target host keys pinned in `/root/.ssh/known_hosts` from inventory rather than accepted on first connect.
 
 ## Operator guides
 

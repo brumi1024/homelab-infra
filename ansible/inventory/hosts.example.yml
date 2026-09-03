@@ -31,6 +31,8 @@ all:
         pve-1:
           homelab_tailscale_ssh_enabled: false
           homelab_ssh_break_glass_enabled: false
+        files:
+          homelab_tailscale_ssh_enabled: false
 
     komodo:
       children:
@@ -97,3 +99,11 @@ all:
               use_template: [default]
             - dataset: blackbox/media
               daily: 14
+
+    # Optional. Unprivileged LXCs running the file_server role: Samba, an
+    # rsync push schedule, and Cockpit with the 45Drives plugins.
+    file_servers:
+      hosts:
+        files:
+          ansible_host: "files"
+          node_site: main

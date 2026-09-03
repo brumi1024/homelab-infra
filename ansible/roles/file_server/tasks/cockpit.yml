@@ -1,0 +1,32 @@
+---
+- name: Ensure the Cockpit socket drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/cockpit.socket.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# The stock cockpit.socket already listens on every interface; the drop-in
+# makes that explicit so a future image with a loopback-restricted default
+# does not silently shrink the LXC's LAN/tailnet reach.
+- name: Ensure Cockpit listens on every interface
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/cockpit.socket.d/homelab-listen.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Socket]
+      ListenStream=
+      ListenStream=9090
+  notify: Reload systemd
+
+- name: Apply pending systemd reload before enabling Cockpit
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure cockpit.socket is enabled and running
+  ansible.builtin.systemd:
+    name: cockpit.socket
+    enabled: true
+    state: started

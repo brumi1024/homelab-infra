@@ -1,0 +1,147 @@
+---
+- name: Start with a clean file server verification failure list
+  ansible.builtin.set_fact:
+    file_server_verify_failures: []
+  tags: file_server
+
+- name: Check smbd service state
+  ansible.builtin.systemd:
+    name: smbd
+  register: file_server_verify_smbd
+  tags: file_server
+
+- name: Record smbd not active
+  ansible.builtin.set_fact:
+    file_server_verify_failures: "{{ file_server_verify_failures + [inventory_hostname ~ ' smbd.service is not active.'] }}"
+  when: file_server_verify_smbd.status.ActiveState != 'active'
+  tags: file_server
+
+- name: Validate the rendered Samba configuration
+  ansible.builtin.command: testparm -s
+  register: file_server_verify_testparm
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: file_server
+
+- name: Record invalid Samba configuration
+  ansible.builtin.set_fact:
+    file_server_verify_failures: "{{ file_server_verify_failures + [inventory_hostname ~ ' testparm -s failed.'] }}"
+  when: file_server_verify_testparm.rc != 0
+  tags: file_server
+
+- name: List Samba shares
+  ansible.builtin.command: smbclient -L localhost -N
+  register: file_server_verify_shares
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: file_server
+
+- name: Record shares missing from the Samba share list
+  ansible.builtin.set_fact:
+    file_server_verify_failures: >-
+      {{
+        file_server_verify_failures
+        + [inventory_hostname ~ ' is missing configured shares: ' ~ (file_server_verify_missing_shares | join(', '))]
+      }}
+  vars:
+    file_server_verify_missing_shares: >-
+      {{
+        file_server_shares
+        | map(attribute='name')
+        | reject('in', file_server_verify_shares.stdout)
+        | list
+      }}
+  when: file_server_verify_missing_shares | length > 0
+  tags: file_server
+
+- name: Check each rsync push timer is active
+  ansible.builtin.systemd:
+    name: "rsync-{{ item.name }}.timer"
+  register: file_server_verify_rsync_timer
+  loop: "{{ file_server_rsync_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: file_server
+
+- name: Record inactive rsync push timers
+  ansible.builtin.set_fact:
+    file_server_verify_failures: >-
+      {{
+        file_server_verify_failures
+        + [inventory_hostname ~ ' rsync-' ~ item.item.name ~ '.timer is not active.']
+      }}
+  loop: "{{ file_server_verify_rsync_timer.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.status.ActiveState | default('') != 'active'
+  tags: file_server
+
+- name: Check the last result of each rsync push service
+  ansible.builtin.systemd:
+    name: "rsync-{{ item.name }}.service"
+  register: file_server_verify_rsync_result
+  loop: "{{ file_server_rsync_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  tags: file_server
+
+- name: Record rsync push jobs whose last run did not succeed
+  # An empty Result means the unit has never run yet, which is expected right
+  # after a fresh apply and is not itself a failure.
+  ansible.builtin.set_fact:
+    file_server_verify_failures: >-
+      {{
+        file_server_verify_failures
+        + [inventory_hostname ~ ' rsync-' ~ item.item.name ~ '.service last result was ' ~ (item.status.Result | default('') ) ~ '.']
+      }}
+  loop: "{{ file_server_verify_rsync_result.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: (item.status.Result | default('')) not in ['success', '']
+  tags: file_server
+
+- name: Check Cockpit socket state
+  ansible.builtin.systemd:
+    name: cockpit.socket
+  register: file_server_verify_cockpit
+  tags: file_server
+
+- name: Record Cockpit socket not active
+  ansible.builtin.set_fact:
+    file_server_verify_failures: "{{ file_server_verify_failures + [inventory_hostname ~ ' cockpit.socket is not active.'] }}"
+  when: file_server_verify_cockpit.status.ActiveState != 'active'
+  tags: file_server
+
+- name: Determine whether any share advertises Time Machine
+  ansible.builtin.set_fact:
+    file_server_verify_time_machine_configured: >-
+      {{ file_server_shares | selectattr('time_machine', 'defined') | selectattr('time_machine') | list | length > 0 }}
+  tags: file_server
+
+- name: Check Avahi daemon state when Time Machine is advertised
+  ansible.builtin.systemd:
+    name: avahi-daemon
+  register: file_server_verify_avahi
+  when: file_server_verify_time_machine_configured
+  tags: file_server
+
+- name: Record Avahi daemon not active despite a configured Time Machine share
+  ansible.builtin.set_fact:
+    file_server_verify_failures: >-
+      {{
+        file_server_verify_failures
+        + [inventory_hostname ~ ' avahi-daemon.service is not active despite a configured Time Machine share.']
+      }}
+  when:
+    - file_server_verify_time_machine_configured
+    - file_server_verify_avahi.status.ActiveState | default('') != 'active'
+  tags: file_server
+
+- name: Require every file server verification check to have passed
+  ansible.builtin.assert:
+    that:
+      - file_server_verify_failures | length == 0
+    fail_msg: "{{ file_server_verify_failures }}"
+  tags: file_server

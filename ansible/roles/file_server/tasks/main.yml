@@ -1,0 +1,24 @@
+---
+- name: Include package tasks
+  ansible.builtin.include_tasks: packages.yml
+  tags: file_server
+
+- name: Include file server user tasks
+  ansible.builtin.include_tasks: users.yml
+  tags: file_server
+
+- name: Include Samba tasks
+  ansible.builtin.include_tasks: samba.yml
+  tags: file_server
+
+- name: Include rsync push job tasks
+  ansible.builtin.include_tasks: rsync.yml
+  tags: file_server
+
+- name: Include Cockpit tasks
+  ansible.builtin.include_tasks: cockpit.yml
+  tags: file_server
+
+- name: Include Avahi Time Machine tasks
+  ansible.builtin.include_tasks: avahi.yml
+  tags: file_server

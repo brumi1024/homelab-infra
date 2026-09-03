@@ -1,0 +1,25 @@
+---
+# Samba
+file_server_smb_workgroup: "WORKGROUP"
+file_server_smb_server_string: "%h file server"
+file_server_smb_conf_path: /etc/samba/smb.conf
+# {name, path, valid_users or guest, read_only, time_machine, time_machine_max_size,
+#  shadow_copies, comment}
+file_server_shares: []
+
+# Unix and Samba accounts. {name, uid, groups, op_item (defaults to name)}
+file_server_users: []
+# Set true to force smbpasswd to re-run for every user on the next apply.
+file_server_force_password_reset: false
+
+# Rsync push jobs. {name, source, target_host, target_path, on_calendar,
+# delete (default true), ping_url (optional)}
+file_server_rsync_jobs: []
+file_server_rsync_ssh_key_item: "File Server Rsync SSH Key"
+# known_hosts lines for every target_host referenced above.
+file_server_rsync_known_hosts: []
+
+# 45Drives repository backing cockpit-file-sharing, cockpit-navigator, and
+# cockpit-identities; matches the community-scripts Cockpit LXC installer.
+file_server_45drives_repo_url: "https://repo.45drives.com/enterprise/debian"
+file_server_45drives_repo_key_url: "https://repo.45drives.com/key/gpg.asc"

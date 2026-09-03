@@ -45,3 +45,11 @@
       ansible.builtin.include_role:
         name: host_baseline
         tasks_from: verify
+
+- name: Apply the file server role
+  hosts: file_servers
+  become: true
+  gather_facts: true
+  roles:
+    - role: file_server
+      tags: [file_server]

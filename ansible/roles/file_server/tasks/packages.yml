@@ -1,0 +1,38 @@
+---
+- name: Ensure Samba, Avahi, and rsync are installed
+  ansible.builtin.apt:
+    name:
+      - samba
+      - samba-vfs-modules
+      - avahi-daemon
+      - rsync
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# The community-scripts Cockpit LXC installer already adds this repository;
+# declaring it here too keeps the role idempotent on top of that script and
+# self-sufficient for a host baselined without it.
+- name: Configure the 45Drives apt repository
+  ansible.builtin.deb822_repository:
+    name: 45drives
+    types: deb
+    uris: "{{ file_server_45drives_repo_url }}"
+    suites: "{{ ansible_facts.distribution_release }}"
+    components: main
+    signed_by: "{{ file_server_45drives_repo_key_url }}"
+    state: present
+  notify: Update apt cache
+
+- name: Apply a pending apt cache update before installing the 45Drives plugins
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Cockpit and the 45Drives plugins are installed
+  ansible.builtin.apt:
+    name:
+      - cockpit
+      - cockpit-file-sharing
+      - cockpit-navigator
+      - cockpit-identities
+    state: present

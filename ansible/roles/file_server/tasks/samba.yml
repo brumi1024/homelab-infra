@@ -1,0 +1,23 @@
+---
+- name: Generate smb.conf from template
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: "{{ file_server_smb_conf_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "testparm -s %s"
+  notify: Restart smbd
+
+- name: Ensure smbd is enabled and running
+  ansible.builtin.systemd:
+    name: smbd
+    enabled: true
+    state: started
+
+- name: Disable nmbd, NetBIOS is off in smb.conf
+  ansible.builtin.systemd:
+    name: nmbd
+    enabled: false
+    state: stopped
+  failed_when: false
