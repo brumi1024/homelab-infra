@@ -1,0 +1,97 @@
+---
+- name: Ensure /root/.ssh exists
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: file_server_rsync_jobs | length > 0
+
+- name: Look up the rsync SSH private key
+  ansible.builtin.set_fact:
+    file_server_rsync_ssh_private_key: >-
+      {{
+        lookup(
+          'community.general.onepassword',
+          file_server_rsync_ssh_key_item,
+          field='private key',
+          vault=homelab_op_vault
+        )
+      }}
+  no_log: true
+  when: file_server_rsync_jobs | length > 0
+
+- name: Install the rsync SSH private key
+  ansible.builtin.copy:
+    content: "{{ file_server_rsync_ssh_private_key }}"
+    dest: /root/.ssh/id_rsync
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: file_server_rsync_jobs | length > 0
+
+- name: Pin rsync target host keys
+  ansible.builtin.blockinfile:
+    path: /root/.ssh/known_hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED file_server rsync known hosts"
+    block: "{{ file_server_rsync_known_hosts | join('\n') }}"
+  when: file_server_rsync_jobs | length > 0
+
+- name: Template the rsync push wrapper script
+  ansible.builtin.template:
+    src: rsync-push.sh.j2
+    dest: "/usr/local/sbin/file-server-rsync-{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0700"
+  vars:
+    job: "{{ item }}"
+  loop: "{{ file_server_rsync_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Template the rsync push systemd service
+  ansible.builtin.template:
+    src: rsync-push.service.j2
+    dest: "/etc/systemd/system/rsync-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    job: "{{ item }}"
+  loop: "{{ file_server_rsync_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd
+
+- name: Template the rsync push systemd timer
+  ansible.builtin.template:
+    src: rsync-push.timer.j2
+    dest: "/etc/systemd/system/rsync-{{ item.name }}.timer"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    job: "{{ item }}"
+  loop: "{{ file_server_rsync_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Reload systemd
+
+- name: Apply pending systemd reload before enabling timers
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure each rsync push timer is enabled and running
+  ansible.builtin.systemd:
+    name: "rsync-{{ item.name }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ file_server_rsync_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"

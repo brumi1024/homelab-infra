@@ -114,6 +114,23 @@ Create an SSH Key item named `SSH Break Glass` only when `homelab_ssh_break_glas
 Generate the key in 1Password so the private half remains there and can be used through the 1Password SSH agent.
 The role reads only the public field.
 
+### Per-user Samba password items
+
+Create one Login item per entry in `file_server_users` before applying the `file_server` role, named for that user's `op_item` (or its `name`, when `op_item` is not set).
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `password` | Password | That user's Samba password, set with `smbpasswd` on first apply or on `file_server_force_password_reset`. |
+
+### `File Server Rsync SSH Key` (or `file_server_rsync_ssh_key_item`)
+
+Create an SSH Key item before applying the `file_server` role on any host with `file_server_rsync_jobs` defined.
+The item name is configurable per deployment through `file_server_rsync_ssh_key_item`.
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `private key` | Private Key | Private half of the key used to push every rsync job over SSH; the public half must be authorized on each `target_host`. |
+
 ## Setup and verification
 
 1. Create the vault or choose an existing dedicated vault.

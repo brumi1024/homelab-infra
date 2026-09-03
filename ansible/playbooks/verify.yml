@@ -50,3 +50,14 @@
           so it was skipped. Run make verify from another machine to cover it.
       when: controller in managed
       tags: always
+
+- name: Verify the file server baseline
+  hosts: file_servers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run file_server verify checks
+      ansible.builtin.include_role:
+        name: file_server
+        tasks_from: verify
+      tags: file_server

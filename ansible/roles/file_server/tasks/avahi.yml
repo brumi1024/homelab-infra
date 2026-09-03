@@ -1,0 +1,28 @@
+---
+- name: Determine whether any share advertises Time Machine
+  ansible.builtin.set_fact:
+    file_server_time_machine_configured: >-
+      {{ file_server_shares | selectattr('time_machine', 'defined') | selectattr('time_machine') | list | length > 0 }}
+
+- name: Advertise Time Machine over Avahi
+  ansible.builtin.template:
+    src: timemachine.service.j2
+    dest: /etc/avahi/services/timemachine.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: file_server_time_machine_configured
+  notify: Restart avahi-daemon
+
+- name: Remove the Time Machine Avahi advertisement when no share needs it
+  ansible.builtin.file:
+    path: /etc/avahi/services/timemachine.service
+    state: absent
+  when: not file_server_time_machine_configured
+  notify: Restart avahi-daemon
+
+- name: Ensure avahi-daemon is enabled and running
+  ansible.builtin.systemd:
+    name: avahi-daemon
+    enabled: true
+    state: started

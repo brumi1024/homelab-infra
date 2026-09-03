@@ -1,0 +1,50 @@
+[global]
+   workgroup = {{ file_server_smb_workgroup }}
+   server string = {{ file_server_smb_server_string }}
+   server min protocol = SMB2
+   security = user
+   disable netbios = yes
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+
+   # macOS client compatibility: resource forks, extended attributes.
+   vfs objects = catia fruit streams_xattr
+   fruit:metadata = stream
+   fruit:model = MacSamba
+   fruit:posix_rename = yes
+   fruit:veto_appledouble = no
+   fruit:nfs_aces = no
+   fruit:wipe_intentionally_left_blank_rfork = yes
+   fruit:delete_empty_adfiles = yes
+
+{% for share in file_server_shares %}
+[{{ share.name }}]
+   path = {{ share.path }}
+   comment = {{ share.comment | default('') }}
+   read only = {{ 'yes' if share.read_only | default(false) else 'no' }}
+{% if share.guest | default(false) %}
+   guest ok = yes
+{% else %}
+   guest ok = no
+   valid users = {{ share.valid_users | join(' ') }}
+{% endif %}
+{% if share.time_machine | default(false) %}
+   fruit:time machine = yes
+{% if share.time_machine_max_size is defined %}
+   fruit:time machine max size = {{ share.time_machine_max_size }}
+{% endif %}
+{% endif %}
+{% if share.shadow_copies | default(false) %}
+   vfs objects = catia fruit streams_xattr shadow_copy2
+   # Matches sanoid's autosnap_YYYY-MM-DD_HH:MM:SS_<period> naming, see the PR description for the citation.
+   shadow:snapdir = .zfs/snapshot
+   shadow:sort = desc
+   shadow:format = _%Y-%m-%d_%H:%M:%S
+   shadow:snapprefix = ^autosnap
+   shadow:delimiter = _
+   shadow:localtime = no
+{% endif %}
+
+{% endfor %}

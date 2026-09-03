@@ -1,0 +1,8 @@
+[Unit]
+Description=Rsync push job: {{ job.name }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/file-server-rsync-{{ job.name }}

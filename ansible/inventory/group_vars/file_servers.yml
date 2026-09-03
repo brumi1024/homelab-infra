@@ -1,0 +1,70 @@
+---
+# Membership explicitly opts a host into SSH access management, matching
+# hosts.example.yml. See host_baseline's ssh_access.yml for the same pattern.
+homelab_tailscale_ssh_managed: true
+
+file_server_smb_workgroup: "WORKGROUP"
+
+file_server_shares:
+  - name: photos
+    path: /mnt/blackbox/photos
+    valid_users: [alice, bob]
+    shadow_copies: true
+    comment: "Family photo library"
+  - name: documents
+    path: /mnt/blackbox/documents
+    valid_users: [alice, bob]
+    shadow_copies: true
+    comment: "Shared documents"
+  - name: home
+    path: /mnt/blackbox/home
+    valid_users: [alice]
+    time_machine: true
+    time_machine_max_size: "500G"
+    comment: "Time Machine backup target"
+  - name: media
+    path: /mnt/blackbox/media
+    guest: true
+    read_only: true
+    comment: "Media library, read-only"
+  - name: appdata
+    path: /mnt/blackbox/appdata
+    valid_users: [alice, bob]
+    comment: "Application data, no shadow copies"
+
+# media is root-owned on disk at mode 0775; membership in its fixed gid is
+# what lets Samba users write into it, not user ownership.
+file_server_groups:
+  - name: media
+    gid: 1001
+
+file_server_users:
+  - name: alice
+    uid: 1000
+    group: media
+    groups: [smbusers]
+  - name: bob
+    uid: 1002
+    groups: [smbusers, media]
+
+file_server_rsync_jobs:
+  - name: photos
+    source: /mnt/blackbox/photos/
+    target_host: nas-remote
+    target_user: backup   # e.g. a Synology account, not root
+    target_path: /backup/photos/
+    on_calendar: "*-*-* 01:00:00"
+  - name: documents
+    source: /mnt/blackbox/documents/
+    target_host: nas-remote
+    target_user: backup
+    target_path: /backup/documents/
+    on_calendar: "*-*-* 01:30:00"
+  - name: appdata
+    source: /mnt/blackbox/appdata/
+    target_host: nas-remote
+    target_user: backup
+    target_path: /backup/appdata/
+    on_calendar: "*-*-* 02:00:00"
+
+file_server_rsync_known_hosts: []

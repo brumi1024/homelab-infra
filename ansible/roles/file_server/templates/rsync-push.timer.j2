@@ -1,0 +1,9 @@
+[Unit]
+Description=Schedule for the {{ job.name }} rsync push job
+
+[Timer]
+OnCalendar={{ job.on_calendar }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
