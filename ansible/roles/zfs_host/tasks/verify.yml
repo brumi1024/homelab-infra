@@ -92,7 +92,7 @@
   ansible.builtin.shell: >-
     set -o pipefail;
     zfs list -H -p -o name,creation -t snapshot {{ item.dataset }}
-    | awk -F'\t' '$1 ~ /@autosnap_[a-z]+_hourly$/ {print $2}'
+    | awk -F'\t' '$1 ~ /@autosnap_.+_hourly$/ {print $2}'
     | sort -rn
     | head -n1
   args:
@@ -104,6 +104,7 @@
   changed_when: false
   failed_when: false
   check_mode: false
+  when: (item.autosnap | default('yes') | string) not in ['no', 'False', 'false']
   tags: zfs
 
 - name: Record a missing or stale hourly autosnap snapshot
@@ -117,8 +118,9 @@
   loop_control:
     label: "{{ item.item.dataset }}"
   when: >-
-    item.stdout | trim | length == 0
-    or (ansible_date_time.epoch | int - (item.stdout | trim | int)) > 7200
+    not (item.skipped | default(false))
+    and (item.stdout | trim | length == 0
+    or (ansible_date_time.epoch | int - (item.stdout | trim | int)) > 7200)
   tags: zfs
 
 - name: Check zfs-import-scan.service state
