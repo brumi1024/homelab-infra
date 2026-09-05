@@ -43,6 +43,8 @@
   when: item in zfs_host_imported_pools.stdout_lines
   tags: zfs
 
+# zpool reports the default cachefile as '-', never as its path, so a bare
+# string comparison would set it on every run.
 - name: Set the pool cachefile where it differs
   ansible.builtin.command: zpool set cachefile=/etc/zfs/zpool.cache {{ item.item }}
   loop: "{{ zfs_host_pool_cachefile_current.results }}"
@@ -50,6 +52,6 @@
     label: "{{ item.item }}"
   when:
     - not item.skipped | default(false)
-    - item.stdout | trim != '/etc/zfs/zpool.cache'
+    - item.stdout | trim not in ['/etc/zfs/zpool.cache', '-']
   changed_when: true
   tags: zfs
