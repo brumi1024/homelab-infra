@@ -23,6 +23,24 @@
     depth: 1
   tags: zfs
 
+- name: Check whether the sanoid source checkout exists
+  ansible.builtin.stat:
+    path: "/usr/local/src/sanoid-{{ zfs_host_sanoid_version }}/sanoid"
+  register: zfs_host_sanoid_source
+  check_mode: false
+  tags: zfs
+
+- name: Report the sanoid install a dry run cannot show without the checkout
+  ansible.builtin.debug:
+    msg: >-
+      sanoid {{ zfs_host_sanoid_version }} would be installed to /usr/local/sbin
+      and /etc/sanoid; the copies need the checkout above and are skipped in check mode.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not zfs_host_sanoid_source.stat.exists
+  tags: zfs
+
 - name: Install sanoid, syncoid, and findoid
   ansible.builtin.copy:
     src: "/usr/local/src/sanoid-{{ zfs_host_sanoid_version }}/{{ item }}"
@@ -35,6 +53,7 @@
     - sanoid
     - syncoid
     - findoid
+  when: zfs_host_sanoid_source.stat.exists
   tags: zfs
 
 - name: Ensure /etc/sanoid exists
@@ -54,6 +73,7 @@
     owner: root
     group: root
     mode: "0644"
+  when: zfs_host_sanoid_source.stat.exists
   tags: zfs
 
 - name: Template sanoid.conf from the configured datasets
@@ -85,9 +105,26 @@
   ansible.builtin.meta: flush_handlers
   tags: zfs
 
+- name: Check whether sanoid.timer is installed
+  ansible.builtin.stat:
+    path: /etc/systemd/system/sanoid.timer
+  register: zfs_host_sanoid_timer_unit
+  check_mode: false
+  tags: zfs
+
+- name: Report the pending sanoid.timer enable a dry run cannot perform
+  ansible.builtin.debug:
+    msg: sanoid.timer would be enabled and started once its unit file is installed.
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not zfs_host_sanoid_timer_unit.stat.exists
+  tags: zfs
+
 - name: Enable and start sanoid.timer
   ansible.builtin.systemd:
     name: sanoid.timer
     enabled: true
     state: started
+  when: zfs_host_sanoid_timer_unit.stat.exists
   tags: zfs

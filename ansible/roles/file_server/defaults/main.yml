@@ -17,8 +17,12 @@ file_server_users: []
 file_server_force_password_reset: false
 
 # Rsync push jobs. {name, source, target_host, target_user (default root),
-# target_path, on_calendar, delete (default true), ping_url (optional)}
+# target_path, on_calendar, flags (default below), delete (default false),
+# ping_url (optional)}
 file_server_rsync_jobs: []
+# No owner, group or permission preservation: a non-root target user on a NAS
+# cannot chown, and rsync would exit 23 on every run.
+file_server_rsync_default_flags: "-rltz --delay-updates"
 file_server_rsync_ssh_key_item: "File Server Rsync SSH Key"
 # known_hosts lines for every target_host referenced above.
 file_server_rsync_known_hosts: []

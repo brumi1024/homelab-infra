@@ -14,7 +14,7 @@ if [ ! -d "$SOURCE" ] || [ -z "$(ls -A "$SOURCE")" ]; then
   exit 1
 fi
 
-if rsync -aH{{ ' --delete' if job.delete | default(true) | bool else '' }} --numeric-ids \
+if rsync {{ job.flags | default(file_server_rsync_default_flags) }}{{ ' --delete' if job.delete | default(false) | bool else '' }} \
     -e "ssh -i $SSH_KEY -o UserKnownHostsFile=$KNOWN_HOSTS" \
     "$SOURCE" "$TARGET"; then
 {% if job.ping_url is defined and job.ping_url %}
