@@ -127,52 +127,6 @@
     - item.rc != 0 or 'NT_STATUS' in item.stdout
   tags: file_server
 
-- name: Check each rsync push timer is active
-  ansible.builtin.systemd:
-    name: "rsync-{{ item.name }}.timer"
-  register: file_server_verify_rsync_timer
-  loop: "{{ file_server_rsync_jobs }}"
-  loop_control:
-    label: "{{ item.name }}"
-  tags: file_server
-
-- name: Record inactive rsync push timers
-  ansible.builtin.set_fact:
-    file_server_verify_failures: >-
-      {{
-        file_server_verify_failures
-        + [inventory_hostname ~ ' rsync-' ~ item.item.name ~ '.timer is not active.']
-      }}
-  loop: "{{ file_server_verify_rsync_timer.results }}"
-  loop_control:
-    label: "{{ item.item.name }}"
-  when: item.status.ActiveState | default('') != 'active'
-  tags: file_server
-
-- name: Check the last result of each rsync push service
-  ansible.builtin.systemd:
-    name: "rsync-{{ item.name }}.service"
-  register: file_server_verify_rsync_result
-  loop: "{{ file_server_rsync_jobs }}"
-  loop_control:
-    label: "{{ item.name }}"
-  tags: file_server
-
-- name: Record rsync push jobs whose last run did not succeed
-  # An empty Result means the unit has never run yet, which is expected right
-  # after a fresh apply and is not itself a failure.
-  ansible.builtin.set_fact:
-    file_server_verify_failures: >-
-      {{
-        file_server_verify_failures
-        + [inventory_hostname ~ ' rsync-' ~ item.item.name ~ '.service last result was ' ~ (item.status.Result | default('') ) ~ '.']
-      }}
-  loop: "{{ file_server_verify_rsync_result.results }}"
-  loop_control:
-    label: "{{ item.item.name }}"
-  when: (item.status.Result | default('')) not in ['success', '']
-  tags: file_server
-
 - name: Check Cockpit socket state
   ansible.builtin.systemd:
     name: cockpit.socket
@@ -208,28 +162,6 @@
   when:
     - file_server_verify_time_machine_configured
     - file_server_verify_avahi.status.ActiveState | default('') != 'active'
-  tags: file_server
-
-- name: Check that a failure notification path exists for rsync jobs
-  ansible.builtin.stat:
-    path: /etc/systemd/system/rsync-failure-notify@.service
-  register: file_server_verify_notify_unit
-  changed_when: false
-  check_mode: false
-  when: file_server_rsync_jobs | length > 0
-  tags: file_server
-
-- name: Record a missing rsync failure notification path
-  ansible.builtin.set_fact:
-    file_server_verify_failures: >-
-      {{
-        file_server_verify_failures
-        + [inventory_hostname ~ ' has rsync push jobs but no failure notification unit, so a failed backup would go unreported.']
-      }}
-  when:
-    - file_server_rsync_jobs | length > 0
-    - file_server_rsync_failure_notify_item | length > 0
-    - not (file_server_verify_notify_unit.stat.exists | default(false))
   tags: file_server
 
 - name: Require every file server verification check to have passed

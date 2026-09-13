@@ -16,10 +16,6 @@
   ansible.builtin.include_tasks: samba.yml
   tags: file_server
 
-- name: Include rsync push job tasks
-  ansible.builtin.include_tasks: rsync.yml
-  tags: file_server
-
 - name: Include Cockpit tasks
   ansible.builtin.include_tasks: cockpit.yml
   tags: file_server

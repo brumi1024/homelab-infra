@@ -53,3 +53,11 @@
   roles:
     - role: file_server
       tags: [file_server]
+
+- name: Apply the rsync push role
+  hosts: rsync_push
+  become: true
+  gather_facts: true
+  roles:
+    - role: rsync_push
+      tags: [rsync_push]

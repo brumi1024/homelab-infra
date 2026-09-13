@@ -1,0 +1,12 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart rsync push timers
+  ansible.builtin.systemd:
+    name: "rsync-{{ item.name }}.timer"
+    state: restarted
+  loop: "{{ rsync_push_jobs }}"
+  loop_control:
+    label: "{{ item.name }}"

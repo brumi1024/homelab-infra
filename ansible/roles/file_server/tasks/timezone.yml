@@ -6,9 +6,8 @@
   check_mode: false
   tags: file_server
 
-- name: Set the timezone so rsync timers keep their intended local times
+- name: Set the timezone
   ansible.builtin.command: timedatectl set-timezone {{ file_server_timezone }}
   when: file_server_timezone_current.stdout | trim != file_server_timezone
   changed_when: true
-  notify: Restart file server rsync timers
   tags: file_server

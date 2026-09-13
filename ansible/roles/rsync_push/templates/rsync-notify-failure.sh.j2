@@ -11,4 +11,4 @@ curl -fsS \
   -H "Priority: high" \
   -H "Tags: warning,floppy_disk" \
   -d "$DETAIL" \
-  "{{ file_server_rsync_failure_notify_url }}" >/dev/null 2>&1
+  "{{ rsync_push_failure_notify_url }}" >/dev/null 2>&1

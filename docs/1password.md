@@ -122,18 +122,18 @@ Create one Login item per entry in `file_server_users` before applying the `file
 | --- | --- | --- |
 | `password` | Password | That user's Samba password, set with `smbpasswd` on first apply or on `file_server_force_password_reset`. |
 
-### `File Server Rsync SSH Key` (or `file_server_rsync_ssh_key_item`)
+### `Rsync Push SSH Key` (or `rsync_push_ssh_key_item`)
 
-Create an SSH Key item before applying the `file_server` role on any host with `file_server_rsync_jobs` defined.
-The item name is configurable per deployment through `file_server_rsync_ssh_key_item`.
+Create an SSH Key item before applying the `rsync_push` role on any host with `rsync_push_jobs` defined.
+The item name is configurable per deployment through `rsync_push_ssh_key_item`.
 
 | Field | Type | Purpose |
 | --- | --- | --- |
 | `private key` | Private Key | Private half of the key used to push every rsync job over SSH; the public half must be authorized on each `target_host`. |
 
-### `File Server Rsync Failure Notify` (or `file_server_rsync_failure_notify_item`)
+### `Rsync Push Failure Notify` (or `rsync_push_failure_notify_item`)
 
-Create this item to have a failed rsync push raise a notification; leave `file_server_rsync_failure_notify_item` empty to opt out.
+Create this item to have a failed rsync push raise a notification; leave `rsync_push_failure_notify_item` empty to opt out.
 
 | Field | Type | Purpose |
 | --- | --- | --- |
