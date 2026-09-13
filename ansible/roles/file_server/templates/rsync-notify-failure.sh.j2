@@ -1,0 +1,14 @@
+#!/bin/sh
+# Report a failed rsync push job. Called by systemd OnFailure with the unit name.
+set -u
+
+UNIT="${1:-unknown}"
+JOB=$(printf '%s' "$UNIT" | sed 's/^rsync-//; s/\.service$//')
+DETAIL=$(journalctl -u "$UNIT" -n 15 --no-pager 2>/dev/null | tail -8)
+
+curl -fsS \
+  -H "Title: rsync push failed on {{ inventory_hostname }}: $JOB" \
+  -H "Priority: high" \
+  -H "Tags: warning,floppy_disk" \
+  -d "$DETAIL" \
+  "{{ file_server_rsync_failure_notify_url }}" >/dev/null 2>&1

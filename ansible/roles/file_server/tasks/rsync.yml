@@ -43,6 +43,40 @@
     block: "{{ file_server_rsync_known_hosts | join('\n') }}"
   when: file_server_rsync_jobs | length > 0
 
+- name: Look up the rsync failure notification URL
+  ansible.builtin.set_fact:
+    file_server_rsync_failure_notify_url: >-
+      {{
+        lookup(
+          'community.general.onepassword',
+          file_server_rsync_failure_notify_item,
+          field=file_server_rsync_failure_notify_field,
+          vault=homelab_op_vault
+        )
+      }}
+  no_log: true
+  when: file_server_rsync_failure_notify_item | length > 0
+
+- name: Install the rsync failure notification script
+  ansible.builtin.template:
+    src: rsync-notify-failure.sh.j2
+    dest: /usr/local/sbin/file-server-rsync-notify-failure
+    owner: root
+    group: root
+    mode: "0700"
+  when: file_server_rsync_failure_notify_item | length > 0
+  no_log: true
+
+- name: Install the rsync failure notification unit
+  ansible.builtin.template:
+    src: rsync-failure-notify@.service.j2
+    dest: /etc/systemd/system/rsync-failure-notify@.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: file_server_rsync_failure_notify_item | length > 0
+  notify: Reload systemd
+
 - name: Template the rsync push wrapper script
   ansible.builtin.template:
     src: rsync-push.sh.j2

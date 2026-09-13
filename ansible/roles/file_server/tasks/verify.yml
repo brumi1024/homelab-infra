@@ -210,6 +210,28 @@
     - file_server_verify_avahi.status.ActiveState | default('') != 'active'
   tags: file_server
 
+- name: Check that a failure notification path exists for rsync jobs
+  ansible.builtin.stat:
+    path: /etc/systemd/system/rsync-failure-notify@.service
+  register: file_server_verify_notify_unit
+  changed_when: false
+  check_mode: false
+  when: file_server_rsync_jobs | length > 0
+  tags: file_server
+
+- name: Record a missing rsync failure notification path
+  ansible.builtin.set_fact:
+    file_server_verify_failures: >-
+      {{
+        file_server_verify_failures
+        + [inventory_hostname ~ ' has rsync push jobs but no failure notification unit, so a failed backup would go unreported.']
+      }}
+  when:
+    - file_server_rsync_jobs | length > 0
+    - file_server_rsync_failure_notify_item | length > 0
+    - not (file_server_verify_notify_unit.stat.exists | default(false))
+  tags: file_server
+
 - name: Require every file server verification check to have passed
   ansible.builtin.assert:
     that:
