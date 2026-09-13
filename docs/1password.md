@@ -131,6 +131,14 @@ The item name is configurable per deployment through `file_server_rsync_ssh_key_
 | --- | --- | --- |
 | `private key` | Private Key | Private half of the key used to push every rsync job over SSH; the public half must be authorized on each `target_host`. |
 
+### `File Server Rsync Failure Notify` (or `file_server_rsync_failure_notify_item`)
+
+Create this item to have a failed rsync push raise a notification; leave `file_server_rsync_failure_notify_item` empty to opt out.
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `url` | Text | Endpoint a failed job posts to, for example an ntfy topic URL. |
+
 ## Setup and verification
 
 1. Create the vault or choose an existing dedicated vault.

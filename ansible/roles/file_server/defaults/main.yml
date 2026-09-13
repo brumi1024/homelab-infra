@@ -29,6 +29,9 @@ file_server_rsync_jobs: []
 # cannot chown, and rsync would exit 23 on every run.
 file_server_rsync_default_flags: "-rltz --delay-updates"
 file_server_rsync_ssh_key_item: "File Server Rsync SSH Key"
+# A failing backup that reports nothing is not a backup; leave empty to opt out.
+file_server_rsync_failure_notify_item: ""
+file_server_rsync_failure_notify_field: "url"
 # known_hosts lines for every target_host referenced above.
 file_server_rsync_known_hosts: []
 
