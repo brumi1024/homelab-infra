@@ -16,11 +16,3 @@
   ansible.builtin.systemd:
     name: avahi-daemon
     state: restarted
-
-- name: Restart file server rsync timers
-  ansible.builtin.systemd:
-    name: "rsync-{{ item.name }}.timer"
-    state: restarted
-  loop: "{{ file_server_rsync_jobs }}"
-  loop_control:
-    label: "{{ item.name }}"

@@ -1,0 +1,14 @@
+---
+# Rsync push jobs. {name, source, target_host, target_user (default root),
+# target_path, on_calendar, flags (default below), delete (default false),
+# ping_url (optional)}
+rsync_push_jobs: []
+# No owner, group or permission preservation: a non-root target user on a NAS
+# cannot chown, and rsync would exit 23 on every run.
+rsync_push_default_flags: "-rltz --delay-updates"
+rsync_push_ssh_key_item: "Rsync Push SSH Key"
+# A failing backup that reports nothing is not a backup; leave empty to opt out.
+rsync_push_failure_notify_item: ""
+rsync_push_failure_notify_field: "url"
+# known_hosts lines for every target_host referenced above.
+rsync_push_known_hosts: []

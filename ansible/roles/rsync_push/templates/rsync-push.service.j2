@@ -2,10 +2,10 @@
 Description=Rsync push job: {{ job.name }}
 After=network-online.target
 Wants=network-online.target
-{% if file_server_rsync_failure_notify_item | length > 0 %}
+{% if rsync_push_failure_notify_item | length > 0 %}
 OnFailure=rsync-failure-notify@%n.service
 {% endif %}
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/file-server-rsync-{{ job.name }}
+ExecStart=/usr/local/sbin/rsync-push-{{ job.name }}

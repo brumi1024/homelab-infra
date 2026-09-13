@@ -1,4 +1,14 @@
 ---
+- name: Ensure rsync and curl are installed
+  ansible.builtin.apt:
+    name:
+      - rsync
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: rsync_push
+
 - name: Ensure /root/.ssh exists
   ansible.builtin.file:
     path: /root/.ssh
@@ -6,31 +16,34 @@
     owner: root
     group: root
     mode: "0700"
-  when: file_server_rsync_jobs | length > 0
+  when: rsync_push_jobs | length > 0
+  tags: rsync_push
 
 - name: Look up the rsync SSH private key
   ansible.builtin.set_fact:
-    file_server_rsync_ssh_private_key: >-
+    rsync_push_ssh_private_key: >-
       {{
         lookup(
           'community.general.onepassword',
-          file_server_rsync_ssh_key_item,
+          rsync_push_ssh_key_item,
           field='private key',
           vault=homelab_op_vault
         )
       }}
   no_log: true
-  when: file_server_rsync_jobs | length > 0
+  when: rsync_push_jobs | length > 0
+  tags: rsync_push
 
 - name: Install the rsync SSH private key
   ansible.builtin.copy:
-    content: "{{ file_server_rsync_ssh_private_key }}"
+    content: "{{ rsync_push_ssh_private_key }}"
     dest: /root/.ssh/id_rsync
     owner: root
     group: root
     mode: "0600"
   no_log: true
-  when: file_server_rsync_jobs | length > 0
+  when: rsync_push_jobs | length > 0
+  tags: rsync_push
 
 - name: Pin rsync target host keys
   ansible.builtin.blockinfile:
@@ -39,33 +52,36 @@
     owner: root
     group: root
     mode: "0600"
-    marker: "# {mark} ANSIBLE MANAGED file_server rsync known hosts"
-    block: "{{ file_server_rsync_known_hosts | join('\n') }}"
-  when: file_server_rsync_jobs | length > 0
+    marker: "# {mark} ANSIBLE MANAGED rsync_push known hosts"
+    block: "{{ rsync_push_known_hosts | join('\n') }}"
+  when: rsync_push_jobs | length > 0
+  tags: rsync_push
 
 - name: Look up the rsync failure notification URL
   ansible.builtin.set_fact:
-    file_server_rsync_failure_notify_url: >-
+    rsync_push_failure_notify_url: >-
       {{
         lookup(
           'community.general.onepassword',
-          file_server_rsync_failure_notify_item,
-          field=file_server_rsync_failure_notify_field,
+          rsync_push_failure_notify_item,
+          field=rsync_push_failure_notify_field,
           vault=homelab_op_vault
         )
       }}
   no_log: true
-  when: file_server_rsync_failure_notify_item | length > 0
+  when: rsync_push_failure_notify_item | length > 0
+  tags: rsync_push
 
 - name: Install the rsync failure notification script
   ansible.builtin.template:
     src: rsync-notify-failure.sh.j2
-    dest: /usr/local/sbin/file-server-rsync-notify-failure
+    dest: /usr/local/sbin/rsync-push-notify-failure
     owner: root
     group: root
     mode: "0700"
-  when: file_server_rsync_failure_notify_item | length > 0
+  when: rsync_push_failure_notify_item | length > 0
   no_log: true
+  tags: rsync_push
 
 - name: Install the rsync failure notification unit
   ansible.builtin.template:
@@ -74,21 +90,23 @@
     owner: root
     group: root
     mode: "0644"
-  when: file_server_rsync_failure_notify_item | length > 0
+  when: rsync_push_failure_notify_item | length > 0
   notify: Reload systemd
+  tags: rsync_push
 
 - name: Template the rsync push wrapper script
   ansible.builtin.template:
     src: rsync-push.sh.j2
-    dest: "/usr/local/sbin/file-server-rsync-{{ item.name }}"
+    dest: "/usr/local/sbin/rsync-push-{{ item.name }}"
     owner: root
     group: root
     mode: "0700"
   vars:
     job: "{{ item }}"
-  loop: "{{ file_server_rsync_jobs }}"
+  loop: "{{ rsync_push_jobs }}"
   loop_control:
     label: "{{ item.name }}"
+  tags: rsync_push
 
 - name: Template the rsync push systemd service
   ansible.builtin.template:
@@ -99,10 +117,11 @@
     mode: "0644"
   vars:
     job: "{{ item }}"
-  loop: "{{ file_server_rsync_jobs }}"
+  loop: "{{ rsync_push_jobs }}"
   loop_control:
     label: "{{ item.name }}"
   notify: Reload systemd
+  tags: rsync_push
 
 - name: Template the rsync push systemd timer
   ansible.builtin.template:
@@ -113,10 +132,11 @@
     mode: "0644"
   vars:
     job: "{{ item }}"
-  loop: "{{ file_server_rsync_jobs }}"
+  loop: "{{ rsync_push_jobs }}"
   loop_control:
     label: "{{ item.name }}"
   notify: Reload systemd
+  tags: rsync_push
 
 - name: Apply pending systemd reload before enabling timers
   ansible.builtin.meta: flush_handlers
@@ -126,6 +146,7 @@
     name: "rsync-{{ item.name }}.timer"
     enabled: true
     state: started
-  loop: "{{ file_server_rsync_jobs }}"
+  loop: "{{ rsync_push_jobs }}"
   loop_control:
     label: "{{ item.name }}"
+  tags: rsync_push

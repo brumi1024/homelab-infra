@@ -100,11 +100,38 @@ all:
             - dataset: blackbox/media
               daily: 14
 
-    # Optional. Unprivileged LXCs running the file_server role: Samba, an
-    # rsync push schedule, and Cockpit with the 45Drives plugins.
+    # Optional. Unprivileged LXCs running the file_server role: Samba and
+    # Cockpit with the 45Drives plugins.
     file_servers:
       hosts:
         files:
           ansible_host: "files"
           node_site: main
           file_server_timezone: "Etc/UTC"
+
+    # Optional. Hosts that own a ZFS pool and push its datasets offsite over
+    # rsync, so the reads happen with the pool owner's privileges rather than
+    # an unprivileged container's.
+    rsync_push:
+      hosts:
+        pve-1:
+          rsync_push_jobs:
+            - name: photos
+              source: /mnt/blackbox/photos/
+              target_host: nas-remote
+              target_user: backup   # e.g. a Synology account, not root
+              target_path: /backup/photos/
+              on_calendar: "*-*-* 01:00:00"
+            - name: documents
+              source: /mnt/blackbox/documents/
+              target_host: nas-remote
+              target_user: backup
+              target_path: /backup/documents/
+              on_calendar: "*-*-* 01:30:00"
+            - name: appdata
+              source: /mnt/blackbox/appdata/
+              target_host: nas-remote
+              target_user: backup
+              target_path: /backup/appdata/
+              on_calendar: "*-*-* 02:00:00"
+          rsync_push_known_hosts: []

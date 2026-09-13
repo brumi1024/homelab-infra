@@ -1,12 +1,11 @@
 ---
-- name: Ensure Samba, Avahi, and rsync are installed
+- name: Ensure Samba and Avahi are installed
   ansible.builtin.apt:
     name:
       - samba
       - samba-vfs-modules
       - smbclient
       - avahi-daemon
-      - rsync
       - curl
     state: present
     update_cache: true

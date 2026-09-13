@@ -61,3 +61,14 @@
         name: file_server
         tasks_from: verify
       tags: file_server
+
+- name: Verify the rsync push baseline
+  hosts: "rsync_push:!{{ lookup('ansible.builtin.pipe', 'hostname -s') }}"
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run rsync_push verify checks
+      ansible.builtin.include_role:
+        name: rsync_push
+        tasks_from: verify
+      tags: rsync_push
