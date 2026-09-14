@@ -141,12 +141,37 @@
 - name: Apply pending systemd reload before enabling timers
   ansible.builtin.meta: flush_handlers
 
-- name: Ensure each rsync push timer is enabled and running
-  ansible.builtin.systemd:
-    name: "rsync-{{ item.name }}.timer"
-    enabled: true
-    state: started
+- name: Check which rsync push timers are installed
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/rsync-{{ item.name }}.timer"
   loop: "{{ rsync_push_jobs }}"
   loop_control:
     label: "{{ item.name }}"
+  register: rsync_push_timer_units
+  check_mode: false
+  tags: rsync_push
+
+- name: Report the timer enables a dry run cannot perform
+  ansible.builtin.debug:
+    msg: >-
+      rsync-{{ item.item.name }}.timer would be enabled and started
+      once its unit file is installed.
+  changed_when: true
+  loop: "{{ rsync_push_timer_units.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when:
+    - ansible_check_mode
+    - not item.stat.exists
+  tags: rsync_push
+
+- name: Ensure each rsync push timer is enabled and running
+  ansible.builtin.systemd:
+    name: "rsync-{{ item.item.name }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ rsync_push_timer_units.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stat.exists
   tags: rsync_push
