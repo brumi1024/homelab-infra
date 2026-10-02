@@ -1,4 +1,9 @@
 ---
+- name: Restart systemd-resolved for the Docker bridge listener
+  ansible.builtin.service:
+    name: systemd-resolved
+    state: restarted
+
 - name: Restart Docker after daemon configuration
   ansible.builtin.service:
     name: docker

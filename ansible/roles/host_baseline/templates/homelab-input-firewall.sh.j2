@@ -18,6 +18,9 @@ case "${1:-start}" in
     nft add rule inet homelab_filter input iifname {{ homelab_security_tailscale_interface }} accept
 {% endif %}
     nft add rule inet homelab_filter input meta nfproto ipv6 icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, echo-request, echo-reply, nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+{% if homelab_docker_dns_enabled | bool and homelab_docker_dns_host_resolver | bool %}
+    nft add rule inet homelab_filter input iifname { "docker0", "br-*" } ip daddr {{ homelab_docker_dns_bridge_address }} meta l4proto { tcp, udp } th dport 53 accept
+{% endif %}
 {% for port in homelab_security_public_tcp_ports %}
     nft add rule inet homelab_filter input tcp dport {{ port }} accept
 {% endfor %}

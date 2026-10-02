@@ -154,5 +154,8 @@
     - inventory_hostname in groups['komodo']
     - homelab_docker_dns_enabled | bool
     - >-
-      host_baseline_verify_docker_daemon_json.dns | default([]) != homelab_docker_dns_servers
+      host_baseline_verify_docker_daemon_json.dns | default([])
+      != ([homelab_docker_dns_bridge_address]
+          if homelab_docker_dns_host_resolver | bool and host_baseline_verify_dns_resolved_expected | default(false) | bool
+          else homelab_docker_dns_servers)
       or host_baseline_verify_docker_daemon_json['dns-search'] | default([]) != homelab_docker_dns_search

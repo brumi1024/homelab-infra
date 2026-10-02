@@ -80,6 +80,11 @@ homelab_ssh_break_glass_enabled: false
 homelab_ssh_break_glass_op_item: "SSH Break Glass"
 homelab_ssh_break_glass_op_field: "public key"
 homelab_docker_dns_enabled: true
+# Where systemd-resolved runs, containers query its stub on the Docker bridge,
+# so they resolve exactly as the host does; homelab_docker_dns_servers is the
+# fallback for hosts without it.
+homelab_docker_dns_host_resolver: true
+homelab_docker_dns_bridge_address: "{{ ansible_facts.docker0.ipv4.address | default('172.17.0.1') }}"
 homelab_docker_dns_servers:
   - "100.100.100.100"
   - "1.1.1.1"

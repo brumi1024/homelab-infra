@@ -1,10 +1,32 @@
 ---
+- name: Detect systemd-resolved for container DNS
+  ansible.builtin.systemd:
+    name: systemd-resolved.service
+  register: docker_role_resolved
+  failed_when: false
+  when: homelab_docker_dns_enabled | bool
+  tags: [docker_packages, docker_config]
+
+- name: Decide where containers resolve names
+  ansible.builtin.set_fact:
+    docker_role_dns_via_host: >-
+      {{
+        homelab_docker_dns_enabled | bool
+        and homelab_docker_dns_host_resolver | bool
+        and docker_role_resolved.status is defined
+        and docker_role_resolved.status.ActiveState | default('') == 'active'
+      }}
+  tags: [docker_packages, docker_config]
+
 - name: Compute the Docker daemon options
   ansible.builtin.set_fact:
     docker_role_daemon_options: >-
       {{
         docker_daemon_options
-        | combine({'dns': homelab_docker_dns_servers, 'dns-search': homelab_docker_dns_search})
+        | combine({
+            'dns': [homelab_docker_dns_bridge_address] if docker_role_dns_via_host | bool else homelab_docker_dns_servers,
+            'dns-search': homelab_docker_dns_search
+          })
         if homelab_docker_dns_enabled | bool
         else docker_daemon_options
       }}
@@ -28,9 +50,30 @@
     mode: "0755"
   tags: docker_config
 
+- name: Ensure the systemd-resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+  when: docker_role_dns_via_host | bool
+  tags: docker_config
+
+# Docker's embedded DNS bypasses the host's 127.0.0.53 stub and asks its
+# upstreams directly, losing resolved's per-link routing of tailnet and site names.
+- name: Serve the host resolver on the Docker bridge
+  ansible.builtin.copy:
+    content: |
+      [Resolve]
+      DNSStubListenerExtra={{ homelab_docker_dns_bridge_address }}
+    dest: /etc/systemd/resolved.conf.d/docker-bridge.conf
+    mode: "0644"
+  notify: Restart systemd-resolved for the Docker bridge listener
+  when: docker_role_dns_via_host | bool
+  tags: docker_config
+
 - name: Configure Docker daemon options
   ansible.builtin.copy:
-    content: "{{ docker_role_daemon_options | to_nice_json }}"
+    content: "{{ docker_role_daemon_options | to_nice_json }}\n"
     dest: /etc/docker/daemon.json
     mode: "0644"
   notify: Restart Docker after daemon configuration
