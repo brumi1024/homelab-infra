@@ -6,9 +6,8 @@
 # copy is whatever the PVE host wrote at container start, which on a host that
 # itself runs Tailscale is 100.100.100.100: tailscaled will not forward to
 # itself, so every non-tailnet name answers SERVFAIL the moment the tailnet has
-# no global nameservers. Containers survive because docker_dns_baseline.yml
-# pins a fallback in daemon.json; host processes, Komodo Periphery's git fetch
-# first among them, do not.
+# no global nameservers. Host processes, Komodo Periphery's git fetch first
+# among them, fail; containers follow the host through the docker role.
 #
 # Where systemd-resolved runs, the durable shape is: /etc/resolv.conf is the
 # resolved stub, PVE is told not to rewrite it, and tailscaled programs only
