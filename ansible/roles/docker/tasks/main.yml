@@ -60,11 +60,14 @@
 
 # Docker's embedded DNS bypasses the host's 127.0.0.53 stub and asks its
 # upstreams directly, losing resolved's per-link routing of tailnet and site names.
+# ReadEtcHosts=no keeps the PVE-written 127.0.1.1 self entry, which is loopback
+# inside a container, out of stub answers; host processes still read it via nss files.
 - name: Serve the host resolver on the Docker bridge
   ansible.builtin.copy:
     content: |
       [Resolve]
       DNSStubListenerExtra={{ homelab_docker_dns_bridge_address }}
+      ReadEtcHosts=no
     dest: /etc/systemd/resolved.conf.d/docker-bridge.conf
     mode: "0644"
   notify: Restart systemd-resolved for the Docker bridge listener
