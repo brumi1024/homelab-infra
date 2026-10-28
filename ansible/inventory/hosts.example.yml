@@ -71,6 +71,10 @@ all:
               homelab_security_forbidden_public_tcp_ports:
                 - 2019   # Caddy admin
               homelab_docker_proxy_firewall_enabled: true
+              # The site Caddy reaches services that have no login of their
+              # own over this network instead of a published port.
+              docker_networks:
+                - site-ingress
 
             docker-2:
               ansible_host: "docker-2"

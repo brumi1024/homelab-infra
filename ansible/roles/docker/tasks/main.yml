@@ -81,3 +81,15 @@
     mode: "0644"
   notify: Restart Docker after daemon configuration
   tags: docker_config
+
+- name: Install the Python client the Docker modules need
+  ansible.builtin.package:
+    name: python3-requests
+    state: present
+  when: docker_networks | length > 0
+
+- name: Create shared Docker networks
+  community.docker.docker_network:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ docker_networks }}"

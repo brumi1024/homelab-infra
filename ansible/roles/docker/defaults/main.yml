@@ -7,3 +7,6 @@ docker_daemon_options:
   storage-driver: overlay2
   features:
     buildkit: true
+
+# Shared bridge networks that stacks on this host join as external networks.
+docker_networks: []
