@@ -304,6 +304,38 @@
       ) != (homelab_tailscale_ssh_enabled | bool)
   tags: [ssh_access, tailscale]
 
+- name: Read Tailscale preferences for forward SNAT verification
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - debug
+      - prefs
+  register: host_baseline_verify_tailscale_snat_prefs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: homelab_tailscale_forward_snat_managed | bool
+  tags: tailscale
+
+- name: Record a Tailscale forward SNAT preference mismatch
+  ansible.builtin.set_fact:
+    host_baseline_verify_failures: >-
+      {{
+        host_baseline_verify_failures
+        + [inventory_hostname ~ ' Tailscale forward SNAT does not match the configured state.']
+      }}
+  when:
+    - homelab_tailscale_forward_snat_managed | bool
+    - >-
+      host_baseline_verify_tailscale_snat_prefs.rc != 0
+      or (
+        (host_baseline_verify_tailscale_snat_prefs.stdout | from_json).NoSNAT
+        | default(false)
+        | bool
+      ) == (homelab_tailscale_forward_snat | bool)
+  tags: tailscale
+
 - name: Read the configured break-glass key for verification
   ansible.builtin.set_fact:
     host_baseline_verify_break_glass_line: >-

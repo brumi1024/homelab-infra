@@ -10,7 +10,7 @@ roles:
 
   # Pragmatic SSH, fail2ban, and unattended-upgrades baseline
   - name: geerlingguy.security
-    version: "3.0.2"
+    version: "3.1.0"
 
   # Komodo periphery deployment with systemd
   - name: bpbradley.komodo
