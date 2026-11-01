@@ -74,6 +74,10 @@ all:
               # A reverse proxy container here sees tailnet client addresses.
               homelab_tailscale_forward_snat_managed: true
               homelab_tailscale_forward_snat: false
+              # The site Caddy reaches services that have no login of their
+              # own over this network instead of a published port.
+              docker_networks:
+                - site-ingress
 
             docker-2:
               ansible_host: "docker-2"
