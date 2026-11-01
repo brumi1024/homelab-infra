@@ -76,6 +76,11 @@ homelab_security_tailscale_interface: tailscale0
 # assume that a configured host belongs to a tailnet with matching SSH rules.
 homelab_tailscale_ssh_managed: false
 homelab_tailscale_ssh_enabled: false
+# tailscaled masquerades traffic it forwards off the tailnet, which includes
+# Docker's DNAT to a published port; turn it off where containers must see
+# tailnet client addresses and the host advertises no subnet routes.
+homelab_tailscale_forward_snat_managed: false
+homelab_tailscale_forward_snat: true
 homelab_ssh_break_glass_enabled: false
 homelab_ssh_break_glass_op_item: "SSH Break Glass"
 homelab_ssh_break_glass_op_field: "public key"

@@ -71,6 +71,9 @@ all:
               homelab_security_forbidden_public_tcp_ports:
                 - 2019   # Caddy admin
               homelab_docker_proxy_firewall_enabled: true
+              # A reverse proxy container here sees tailnet client addresses.
+              homelab_tailscale_forward_snat_managed: true
+              homelab_tailscale_forward_snat: false
 
             docker-2:
               ansible_host: "docker-2"
