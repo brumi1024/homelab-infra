@@ -1,0 +1,65 @@
+---
+- name: Read Tailscale preferences before managing forward SNAT
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - debug
+      - prefs
+  register: host_baseline_tailscale_snat_prefs
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when: homelab_tailscale_forward_snat_managed | bool
+  tags: tailscale
+
+- name: Parse the current Tailscale forward SNAT preference
+  ansible.builtin.set_fact:
+    host_baseline_tailscale_snat_current: >-
+      {{
+        not (
+          (
+            host_baseline_tailscale_snat_prefs.stdout
+            | from_json
+          ).NoSNAT | default(false) | bool
+        )
+      }}
+  no_log: true
+  when: homelab_tailscale_forward_snat_managed | bool
+  tags: tailscale
+
+- name: Require APPLY=1 before changing Tailscale forward SNAT
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_check_mode
+        or host_baseline_tailscale_snat_current | bool == (homelab_tailscale_forward_snat | bool)
+        or lookup('ansible.builtin.env', 'APPLY') == '1'
+    fail_msg: Tailscale forward SNAT changes require APPLY=1.
+  when: homelab_tailscale_forward_snat_managed | bool
+  tags: tailscale
+
+- name: Report the planned Tailscale forward SNAT change
+  ansible.builtin.debug:
+    msg: >-
+      Tailscale forward SNAT would change from
+      {{ host_baseline_tailscale_snat_current | bool }} to
+      {{ homelab_tailscale_forward_snat | bool }}.
+  changed_when: true
+  when:
+    - homelab_tailscale_forward_snat_managed | bool
+    - ansible_check_mode
+    - host_baseline_tailscale_snat_current | bool != (homelab_tailscale_forward_snat | bool)
+  tags: tailscale
+
+- name: Set the desired Tailscale forward SNAT state
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - set
+      - "--snat-subnet-routes={{ homelab_tailscale_forward_snat | bool | ternary('true', 'false') }}"
+  changed_when: true
+  when:
+    - homelab_tailscale_forward_snat_managed | bool
+    - not ansible_check_mode
+    - host_baseline_tailscale_snat_current | bool != (homelab_tailscale_forward_snat | bool)
+  tags: tailscale

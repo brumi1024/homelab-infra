@@ -7,6 +7,10 @@
   ansible.builtin.include_tasks: tailscale_ssh.yml
   tags: [ssh_access, tailscale]
 
+- name: Include Tailscale forward SNAT tasks
+  ansible.builtin.include_tasks: tailscale_snat.yml
+  tags: tailscale
+
 - name: Include security tasks
   ansible.builtin.include_tasks: security.yml
 
