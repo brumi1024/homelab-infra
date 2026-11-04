@@ -25,7 +25,7 @@
 - name: Require a Tailscale address for the Core host
   ansible.builtin.assert:
     that:
-      - homelab_docker_proxy_source_ip is match('^100\\.(6[4-9]|[7-9][0-9]|1[0-2][0-7])\\.')
+      - homelab_docker_proxy_source_ip is match('^100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.')
     fail_msg: >-
       {{ groups['core'] | first }} did not report a Tailscale address
       (got '{{ homelab_docker_proxy_source_ip }}'). Check that tailscaled is
