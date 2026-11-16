@@ -8,10 +8,10 @@ docker_daemon_options:
   features:
     buildkit: true
   # Docker's stock pools spill into 192.168.0.0/16 after fifteen networks and
-  # shadow LAN routes; these stay inside 172.16.0.0/12. docker0 takes the first.
+  # shadow LAN routes; this one stays inside 172.16.0.0/12. bip pins docker0 to
+  # its stock address, which the pool would otherwise hand out first.
+  bip: 172.17.0.1/16
   default-address-pools:
-    - base: 172.17.0.0/16
-      size: 16
     - base: 172.16.0.0/16
       size: 24
 
