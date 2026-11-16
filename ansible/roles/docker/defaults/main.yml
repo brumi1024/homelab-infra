@@ -7,6 +7,13 @@ docker_daemon_options:
   storage-driver: overlay2
   features:
     buildkit: true
+  # Docker's stock pools spill into 192.168.0.0/16 after fifteen networks and
+  # shadow LAN routes; these stay inside 172.16.0.0/12. docker0 takes the first.
+  default-address-pools:
+    - base: 172.17.0.0/16
+      size: 16
+    - base: 172.16.0.0/16
+      size: 24
 
 # Shared bridge networks that stacks on this host join as external networks.
 docker_networks: []
