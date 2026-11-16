@@ -1,4 +1,12 @@
 ---
+# A second snapshot tool would ignore sanoid's per-dataset retention and exclusions.
+- name: Purge zfs-auto-snapshot so sanoid is the only snapshot tool
+  ansible.builtin.apt:
+    name: zfs-auto-snapshot
+    state: absent
+    purge: true
+  tags: zfs
+
 - name: Install git for the sanoid source checkout
   ansible.builtin.apt:
     name: git

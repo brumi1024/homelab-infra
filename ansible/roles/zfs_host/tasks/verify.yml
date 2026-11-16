@@ -88,6 +88,52 @@
   when: zfs_host_verify_sanoid_timer.status.ActiveState | default('') != 'active'
   tags: zfs
 
+- name: Check that zfs-auto-snapshot is purged
+  ansible.builtin.command: dpkg-query -W -f=${db:Status-Status} zfs-auto-snapshot
+  register: zfs_host_verify_auto_snapshot_pkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: zfs
+
+- name: Record a zfs-auto-snapshot package that is not purged
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: >-
+      {{
+        zfs_host_verify_failures
+        + [inventory_hostname ~ ' zfs-auto-snapshot is ' ~ (zfs_host_verify_auto_snapshot_pkg.stdout | trim) ~ ', expected purged.']
+      }}
+  when:
+    - zfs_host_verify_auto_snapshot_pkg.rc == 0
+    - zfs_host_verify_auto_snapshot_pkg.stdout | trim not in ['', 'not-installed']
+  tags: zfs
+
+- name: Count zfs-auto-snapshot snapshots on the managed pools
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    zfs list -H -o name -t snapshot -r {{ zfs_host_pools | join(' ') }}
+    | grep -c '@zfs-auto-snap_' || true
+  args:
+    executable: /bin/bash
+  register: zfs_host_verify_auto_snapshot_count
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: zfs_host_pools | length > 0
+  tags: zfs
+
+- name: Record leftover zfs-auto-snapshot snapshots
+  ansible.builtin.set_fact:
+    zfs_host_verify_failures: >-
+      {{
+        zfs_host_verify_failures
+        + [inventory_hostname ~ ' still has ' ~ (zfs_host_verify_auto_snapshot_count.stdout | trim) ~ ' @zfs-auto-snap_ snapshots.']
+      }}
+  when:
+    - not (zfs_host_verify_auto_snapshot_count.skipped | default(false))
+    - (zfs_host_verify_auto_snapshot_count.stdout | trim | int) > 0
+  tags: zfs
+
 - name: Read the newest hourly autosnap snapshot per configured dataset
   ansible.builtin.shell: >-
     set -o pipefail;
