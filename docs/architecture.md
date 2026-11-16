@@ -80,6 +80,7 @@ The guest playbook is an imperative operation and must be reviewed for its exact
 `zfs_host` covers the Proxmox side of a ZFS data pool: ARC sizing through `/etc/modprobe.d` and the live kernel parameter, sanoid for policy-driven snapshot and prune, and a couple of pool properties (`compatibility`, `cachefile`).
 Sanoid ships as a Debian package, but this repository builds it from a pinned upstream git tag instead, because the package can lag or go unmaintained on a given release; `zfs_host_sanoid_version` is the one place that pin lives.
 Snapshot retention per dataset is declared in inventory (`zfs_host_sanoid_datasets`), templated into `sanoid.conf`, and enforced by `sanoid.timer` rather than cron.
+Sanoid is the only snapshot tool: the role purges Debian's `zfs-auto-snapshot`, which would otherwise snapshot every dataset on its own schedule and override sanoid's per-dataset exclusions, and `verify` fails while the package or any `@zfs-auto-snap_` snapshot remains.
 Pool import and export stay a supervised, live step outside this role: `zfs_host` only reconciles properties on pools that are already imported, and it never runs `zpool upgrade`, since that is a one-way change with no supported rollback.
 
 ## Design choices worth knowing

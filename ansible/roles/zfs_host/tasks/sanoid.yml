@@ -1,4 +1,12 @@
 ---
+# A second snapshot tool would ignore sanoid's per-dataset retention and exclusions.
+- name: Purge zfs-auto-snapshot so sanoid is the only snapshot tool
+  ansible.builtin.apt:
+    name: zfs-auto-snapshot
+    state: absent
+    purge: true
+  tags: zfs
+
 - name: Install git for the sanoid source checkout
   ansible.builtin.apt:
     name: git
@@ -15,12 +23,14 @@
 
 # The Debian package was orphaned 2026-08-31 and Debian 13 ships 2.2.0;
 # the pinned upstream tag keeps sanoid current without a third-party repo.
+# The checkout path carries the tag, so an existing one is never fetched again.
 - name: Check out the sanoid source at the pinned tag
   ansible.builtin.git:
     repo: https://github.com/jimsalterjrs/sanoid.git
     dest: "/usr/local/src/sanoid-{{ zfs_host_sanoid_version }}"
     version: "{{ zfs_host_sanoid_version }}"
     depth: 1
+    update: false
   tags: zfs
 
 - name: Check whether the sanoid source checkout exists
