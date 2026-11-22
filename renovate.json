@@ -2,5 +2,25 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Ansible roles and collections share one non-major PR",
+      "matchManagers": ["ansible-galaxy"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Ansible"
+    },
+    {
+      "description": "Ansible Python tooling joins the same group",
+      "matchManagers": ["pip_requirements"],
+      "matchPackageNames": ["ansible-core", "ansible-lint"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Ansible"
+    },
+    {
+      "description": "Patch updates merge themselves once CI passes",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    }
   ]
 }
